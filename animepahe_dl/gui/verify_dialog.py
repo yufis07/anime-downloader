@@ -8,7 +8,7 @@ If WebEngine is not available, the user can paste the cookie manually.
 
 from __future__ import annotations
 
-import re
+import time
 from urllib.parse import urlsplit
 
 from PySide6.QtCore import QTimer, QUrl
@@ -56,8 +56,8 @@ def _shared_profile():  # type: ignore[no-untyped-def]
             _profile.setPersistentStoragePath(str(storage))
             _profile.setCachePath(str(storage / "cache"))
             _profile.setPersistentCookiesPolicy(cookies)
-        # Hide the QtWebEngine token so the UA looks like regular Chrome.
-        _profile.setHttpUserAgent(re.sub(r"\s*QtWebEngine/\S+", "", _profile.httpUserAgent()))
+        # Keep the engine's genuine User-Agent. Changing only the UA string makes it disagree with the
+        # browser's other signals (client hints, JS APIs), which Cloudflare answers with endless re-checks.
     return _profile
 
 
@@ -71,6 +71,10 @@ class VerifyDialog(QDialog):
         self.cookies: dict[str, str] = {}
         self.user_agent = ""
         self._verified = False
+        self.reset_requested = False  # tells the caller to drop previously saved cookies
+        self._challenge_loads = 0
+        self._challenge_since: float | None = None
+        self._loaded_ok = False  # a page finished loading (not just a title placeholder)
 
         layout = QVBoxLayout(self)
         self.info = QLabel(
@@ -97,22 +101,41 @@ class VerifyDialog(QDialog):
         self._store = profile.cookieStore()
         self._store.cookieAdded.connect(self._on_cookie)
         self._store.loadAllCookies()
+        self.page.loadStarted.connect(self._on_load_started)
         self.page.loadFinished.connect(self._on_loaded)
         self.page.titleChanged.connect(lambda _t: self._check_title())
+
+        self.loop_hint = QLabel(
+            "The check keeps repeating. Try these in order: 1) click Reset browser data, "
+            "2) turn off any VPN or proxy and click Reload, 3) click Enter cookie manually and copy the "
+            "cookie from Chrome or Edge. If the check loops in your normal browser too, the site itself "
+            "is under heavy protection right now. Wait a while and try again."
+        )
+        self.loop_hint.setWordWrap(True)
+        self.loop_hint.setStyleSheet("background: rgba(245,158,11,0.15); border: 1px solid #f59e0b; "
+                                     "border-radius: 8px; padding: 8px;")
+        self.loop_hint.hide()
+        layout.addWidget(self.loop_hint)
 
         buttons = QHBoxLayout()
         self.status = QLabel("Loading…")
         manual = QPushButton("Enter cookie manually…")
         manual.clicked.connect(self._manual_popup)
+        reset_btn = QPushButton("Reset browser data")
+        reset_btn.setToolTip("Delete this window's cookies and cache, then reload (fixes most check loops)")
+        reset_btn.clicked.connect(self._reset_browser)
         reload_btn = QPushButton("Reload")
         reload_btn.clicked.connect(self.view.reload)
+        self._loop_timer = QTimer(self)
+        self._loop_timer.timeout.connect(self._check_loop)
+        self._loop_timer.start(3000)
         self.done_btn = QPushButton("Done")
         self.done_btn.setObjectName("primary")
         self.done_btn.clicked.connect(self.accept)
         cancel = QPushButton("Cancel")
         cancel.clicked.connect(self.reject)
         buttons.addWidget(self.status, 1)
-        for button in (manual, reload_btn, cancel, self.done_btn):
+        for button in (manual, reset_btn, reload_btn, cancel, self.done_btn):
             buttons.addWidget(button)
         layout.addLayout(buttons)
         self.view.load(QUrl(self.base_url))
@@ -126,24 +149,84 @@ class VerifyDialog(QDialog):
             if name == "cf_clearance":
                 self._check_title()
 
+    def _on_load_started(self) -> None:
+        self._loaded_ok = False
+
     def _on_loaded(self, ok: bool) -> None:
+        self._loaded_ok = ok
+        # Cloudflare serves its challenge with an error status, which the engine reports as a failed
+        # load. Treat it as a challenge, not as a network failure.
+        if self._is_challenge():
+            self._challenge_loads += 1
+            self._check_title()
+            self._check_loop()
+            return
         if not ok:
-            self.status.setText("Page failed to load. Check the site address in Settings.")
+            self.status.setText("Page failed to load. The site may be down or blocked on your network.")
             return
         self._check_title()
 
-    def _check_title(self) -> None:
+    def _is_challenge(self) -> bool:
         title = (self.page.title() or "").lower()
-        url = self.page.url().toString()
-        if not url or url == "about:blank":
+        return any(marker in title for marker in _CHALLENGE_TITLES)
+
+    def _check_loop(self) -> None:
+        if self._verified:
+            self._loop_timer.stop()
             return
-        if any(marker in title for marker in _CHALLENGE_TITLES):
+        if self._is_challenge():
+            if self._challenge_since is None:
+                self._challenge_since = time.monotonic()
+            stuck = time.monotonic() - self._challenge_since > 45
+            if self._challenge_loads >= 3 or stuck:
+                self.loop_hint.show()
+                self.status.setText("The check is looping.")
+        else:
+            self._challenge_since = None
+
+    def _reset_browser(self) -> None:
+        profile = self.page.profile()
+        profile.cookieStore().deleteAllCookies()
+        profile.clearHttpCache()
+        self.cookies.clear()
+        self.reset_requested = True
+        self._challenge_loads = 0
+        self._challenge_since = None
+        self.loop_hint.hide()
+        self.status.setText("Browser data cleared. Loading…")
+        QTimer.singleShot(500, lambda: self.view.load(QUrl(self.base_url)))
+
+    def _has_real_title(self) -> bool:
+        """While loading, the engine uses the address as a placeholder title; that is not the site."""
+        title = (self.page.title() or "").strip().lower()
+        if not title:
+            return False
+        url_like = " " not in title and ("/" in title or self.host in title or title.startswith("http"))
+        return not url_like
+
+    def _site_loaded(self) -> bool:
+        url = self.page.url().toString()
+        return (bool(url) and url != "about:blank" and self._loaded_ok
+                and self._has_real_title() and not self._is_challenge())
+
+    def _check_title(self) -> None:
+        if self._verified:
+            return
+        if self._is_challenge():
             self.status.setText("Waiting for the check to finish…")
             return
-        if title and not self._verified:
+        if self._site_loaded():
             self._verified = True
             self.status.setText("✔ Verified. Closing…")
-            QTimer.singleShot(1200, self.accept)
+            QTimer.singleShot(1200, self._confirm_and_accept)
+
+    def _confirm_and_accept(self) -> None:
+        # The challenge can redirect back to itself; only close if the real site is still showing.
+        if self._site_loaded():
+            self.accept()
+        else:
+            self._verified = False
+            self.status.setText("Waiting for the check to finish…")
 
     # ------------------------------------------------------------------ manual mode
     def _build_manual(self, layout: QVBoxLayout) -> None:
@@ -179,6 +262,7 @@ class VerifyDialog(QDialog):
     def done(self, result: int) -> None:  # noqa: D401 - Qt override
         if HAS_WEBENGINE and hasattr(self, "view"):
             self.view.stop()
+            self._loop_timer.stop()
             try:
                 self._store.cookieAdded.disconnect(self._on_cookie)
             except (RuntimeError, TypeError):

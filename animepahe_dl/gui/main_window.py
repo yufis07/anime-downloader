@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -43,6 +44,7 @@ class MainWindow(QMainWindow):
         self._images: dict[str, QPixmap] = {}
         self._cf_prompt_pending = False
         self._verifying = False
+        self._last_verified = 0.0  # monotonic time of the last successful browser check
         self.cloudflare_needed.connect(self._cloudflare_prompt, Qt.ConnectionType.QueuedConnection)
         self.manager = DownloadManager(self.api, self.settings, on_cloudflare=self._cloudflare_from_thread)
 
@@ -147,7 +149,7 @@ class MainWindow(QMainWindow):
             if on_error:
                 on_error()
             if isinstance(exc, CloudflareChallenge):
-                if self.verify() and retry:
+                if self._verify_after_block() and retry:
                     retry()
                 return
             QMessageBox.warning(self, "Something went wrong", str(exc) or exc.__class__.__name__)
@@ -183,8 +185,29 @@ class MainWindow(QMainWindow):
 
     def _cloudflare_prompt(self) -> None:
         self._cf_prompt_pending = False
-        if self.verify():
+        if self._verify_after_block():
             self.manager.retry_failed(only_cloudflare=True)
+
+    def _verify_after_block(self) -> bool:
+        """Open the check window after a block, but never straight after a check that just 'passed'.
+
+        If the site blocks the app again within a minute of a successful check, reopening the window
+        would only loop. Explain what to try instead.
+        """
+        if time.monotonic() - self._last_verified < 60:
+            QMessageBox.warning(
+                self, "Cloudflare is still blocking the app",
+                "The browser check passed, but the site still refuses the app's requests.\n\n"
+                "Try this:\n"
+                "1. Click Cloudflare check in the sidebar, then Reset browser data, and pass the check again.\n"
+                "2. Turn off any VPN or proxy.\n"
+                "3. In the check window, use Enter cookie manually with the cookie and User-Agent from "
+                "Chrome or Edge.\n\n"
+                "If the check also loops in your normal browser, the site is under heavy protection right "
+                "now. Wait a while and try again.",
+            )
+            return False
+        return self.verify()
 
     def verify(self) -> bool:
         if self._verifying:
@@ -196,11 +219,15 @@ class MainWindow(QMainWindow):
             dialog.deleteLater()
             if not accepted:
                 return False
+            if getattr(dialog, "reset_requested", False):
+                self.settings.cookies = {}
+                self.http.cookies = {}
             self.settings.cookies.update(dialog.cookies)
             if dialog.user_agent:
                 self.settings.user_agent = dialog.user_agent
             self.settings.save()
             self.http.set_identity(self.settings.user_agent, self.settings.cookies)
+            self._last_verified = time.monotonic()
             self.notify("Browser check saved.")
             return True
         finally:

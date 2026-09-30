@@ -130,6 +130,10 @@ Run the tests with `python -m pytest -q`.
 
 ## Troubleshooting
 
+- **The Cloudflare check keeps repeating.** In the check window, click **Reset browser data** and pass
+  the check again. Turn off any VPN or proxy. If it still loops, click **Enter cookie manually** and copy
+  `cf_clearance` and the User-Agent from Chrome or Edge. If the check also loops in your normal browser,
+  the site is under heavy protection at the moment, so wait and try later.
 - **"… answered with a web page … instead of AnimePahe search data."** The Site address points to a
   look-alike site that uses the AnimePahe name, for example animepahe.ch. Set it to the real address,
   currently `https://animepahe.pw`, and use **Test** next to Site address in Settings to confirm it works.
