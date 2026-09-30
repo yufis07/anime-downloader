@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..animepahe import Anime, Episode, parse_anime_session
+from ..mal import MalLookup
 from ..config import AUDIO_CHOICES, QUALITIES
 from ..utils import format_episode, parse_episode_selection
 from .theme import emphasize, line_icon, placeholder_poster, rounded_pixmap
@@ -48,9 +49,20 @@ class SearchPage(QWidget):
         self.search_btn.setObjectName("searchButton")
         self.search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.search_btn.clicked.connect(self.search)
+        self.jp_btn = QPushButton("日本語")
+        self.jp_btn.setToolTip("Look the English title up on MyAnimeList and show its Japanese title")
+        self.jp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.jp_btn.clicked.connect(self.lookup_japanese)
         bar.addWidget(self.input, 1)
         bar.addWidget(self.search_btn)
+        bar.addWidget(self.jp_btn)
         layout.addLayout(bar)
+        self.jp_label = QLabel("")
+        self.jp_label.setObjectName("muted")
+        self.jp_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.jp_label.hide()
+        layout.addWidget(self.jp_label)
+        self.mal = MalLookup()
 
         self.views = QStackedWidget()
         layout.addWidget(self.views, 1)
@@ -102,6 +114,27 @@ class SearchPage(QWidget):
             def load() -> list[Anime]:
                 return self.ctx.api.search(text)
         self.ctx.run(load, self._show_results, retry=self.search, on_error=lambda: self._set_loading(False))
+
+    def lookup_japanese(self) -> None:
+        text = self.input.text().strip()
+        if not text:
+            return
+        self.jp_btn.setEnabled(False)
+        self.jp_label.setText(f"Looking up “{text}” on MyAnimeList…")
+        self.jp_label.show()
+
+        def done(match) -> None:  # type: ignore[no-untyped-def]
+            self.jp_btn.setEnabled(True)
+            if match:
+                self.jp_label.setText(f"{match.title_japanese}   ({match.title_english or match.title})")
+            else:
+                self.jp_label.setText("No Japanese title found on MyAnimeList.")
+
+        def failed(exc: Exception) -> None:
+            self.jp_btn.setEnabled(True)
+            self.jp_label.setText(f"MyAnimeList lookup failed: {exc}")
+
+        self.ctx.jobs.submit(lambda: self.mal.japanese_title(text), done, failed)
 
     def _set_loading(self, loading: bool, message: str = "") -> None:
         self.search_btn.setEnabled(not loading)

@@ -3,6 +3,7 @@
 Examples::
 
     AnimePaheDL.exe cli search "frieren"
+    AnimePaheDL.exe cli japanese "Frieren: Beyond Journey's End"
     AnimePaheDL.exe cli download https://animepahe.pw/anime/<uuid> -e 1-12 -q 720 -a eng
 """
 
@@ -15,7 +16,8 @@ import time
 from .animepahe import AnimePahe, parse_anime_session
 from .config import Settings
 from .downloader import DownloadManager, Status
-from .http import CloudflareChallenge, HttpClient
+from .http import CloudflareChallenge, HttpClient, HttpError
+from .mal import MalLookup
 from .utils import format_episode, format_speed, parse_episode_selection
 
 
@@ -39,6 +41,21 @@ def cmd_search(args: argparse.Namespace) -> int:
     for index, anime in enumerate(api.search(args.query), 1):
         print(f"{index:2}. {anime.title}  [{anime.subtitle}]")
         print(f"    {api.base_url}/anime/{anime.session}")
+    return 0
+
+
+def cmd_japanese(args: argparse.Namespace) -> int:
+    try:
+        match = MalLookup().japanese_title(args.title)
+    except HttpError as exc:
+        print(f"MyAnimeList lookup failed: {exc}", file=sys.stderr)
+        return 2
+    if not match:
+        print("No Japanese title found on MyAnimeList.")
+        return 1
+    print(match.title_japanese)
+    print(f"  {match.title}" + (f" / {match.title_english}" if match.title_english else ""))
+    print(f"  {match.url}")
     return 0
 
 
@@ -104,6 +121,10 @@ def main(argv: list[str] | None = None) -> int:
     search = sub.add_parser("search", help="Search anime by title")
     search.add_argument("query")
     search.set_defaults(func=cmd_search)
+
+    japanese = sub.add_parser("japanese", help="Look up an English title on MyAnimeList and print its Japanese title")
+    japanese.add_argument("title")
+    japanese.set_defaults(func=cmd_japanese)
 
     download = sub.add_parser("download", help="Download episodes")
     download.add_argument("anime", help="Anime URL, session id or search text (first hit is used)")

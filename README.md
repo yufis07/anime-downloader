@@ -16,6 +16,8 @@ downloads the episodes you pick, several at a time, as `.mp4` files.
 - **MP4 output** through ffmpeg. Without ffmpeg the video is saved as `.ts`, which VLC and MPV play.
 - **Cloudflare handling.** A built-in browser window lets you pass the "Verify you are human" check.
   The app then reuses that browser's cookie and User-Agent.
+- **Japanese title lookup.** Type an English title and click **日本語** (or run `cli japanese "…"`)
+  to get its Japanese title from MyAnimeList, through the free Jikan API.
 - Light and dark mode that follows Windows. There is also a command-line mode for scripting.
 
 ## Install
@@ -118,6 +120,7 @@ Settings and the browser profile live in `%APPDATA%\AnimePaheDL`.
 | Path | What it does |
 | --- | --- |
 | `animepahe_dl/animepahe.py` | Site API client: search, episodes, source scraping and selection |
+| `animepahe_dl/mal.py` | English title → Japanese title lookup on MyAnimeList (Jikan API) |
 | `animepahe_dl/kwik.py` | JavaScript unpacker and playlist extraction |
 | `animepahe_dl/hls.py` | HLS parser and parallel AES-128 segment downloader with resume |
 | `animepahe_dl/downloader.py` | Download queue, parallel episodes, ffmpeg remux |
