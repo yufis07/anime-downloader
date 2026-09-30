@@ -1,0 +1,33 @@
+name: Build Anime Downloader (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: Run tests
+        run: python -m pytest -q
+      - name: Build executable
+        run: pyinstaller AnimePaheDL.spec --noconfirm
+      - name: Smoke test CLI in the built exe
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\AnimePaheDL\AnimePaheDL.exe -ArgumentList "cli","--help" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "exe failed with $($p.ExitCode)" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AnimePaheDL-windows-x64
+          path: dist/AnimePaheDL
