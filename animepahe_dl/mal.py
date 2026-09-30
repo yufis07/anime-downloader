@@ -1,7 +1,7 @@
 """MyAnimeList lookup: turn an English anime title into the Japanese (romaji) title.
 
 MyAnimeList's default title is the romaji one, e.g. "Sousou no Frieren" for "Frieren: Beyond
-Journey's End". ``MalTitle.title`` is that name; ``title_japanese`` is the kanji/kana version.
+Journey's End". ``MalTitle.title`` is that name.
 
 MyAnimeList's own API needs a client id, so this uses Jikan (https://jikan.moe), the public
 read-only API that mirrors MyAnimeList's data and needs no key.
@@ -24,7 +24,6 @@ class MalTitle:
     mal_id: int
     title: str  # MyAnimeList's default (romaji) title
     title_english: str = ""
-    title_japanese: str = ""
     synonyms: list[str] = field(default_factory=list)
     type: str = ""
     year: int | None = None
@@ -47,7 +46,6 @@ def _parse_entry(item: dict) -> MalTitle:
         mal_id=int(item.get("mal_id") or 0),
         title=str(item.get("title") or ""),
         title_english=str(item.get("title_english") or ""),
-        title_japanese=str(item.get("title_japanese") or ""),
         synonyms=synonyms,
         type=str(item.get("type") or ""),
         year=item.get("year"),

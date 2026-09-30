@@ -54,8 +54,6 @@ def cmd_japanese(args: argparse.Namespace) -> int:
         print("No match found on MyAnimeList.")
         return 1
     print(match.title)
-    if match.title_japanese:
-        print(f"  {match.title_japanese}")
     print(f"  {match.url}")
     return 0
 

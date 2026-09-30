@@ -2,11 +2,11 @@ from animepahe_dl.mal import MalLookup, _parse_entry, best_match
 
 FRIEREN = {
     "mal_id": 52991, "title": "Sousou no Frieren", "title_english": "Frieren: Beyond Journey's End",
-    "title_japanese": "葬送のフリーレン", "type": "TV", "year": 2023, "url": "https://myanimelist.net/anime/52991",
+    "type": "TV", "year": 2023, "url": "https://myanimelist.net/anime/52991",
     "titles": [{"type": "Default", "title": "Sousou no Frieren"}, {"type": "Synonym", "title": "Frieren at the Funeral"}],
 }
-OTHER = {"mal_id": 1, "title": "Frieren Recap", "title_english": "", "title_japanese": "", "titles": []}
-OTHER_JP = {"mal_id": 2, "title": "Something Else", "title_english": "Something Else", "title_japanese": "別のもの", "titles": []}
+OTHER = {"mal_id": 1, "title": "Frieren Recap", "title_english": "", "titles": []}
+OTHER_JP = {"mal_id": 2, "title": "Something Else", "title_english": "Something Else", "titles": []}
 
 
 class FakeHttp:
@@ -20,7 +20,7 @@ class FakeHttp:
 
 def test_parse_entry():
     entry = _parse_entry(FRIEREN)
-    assert entry.title_japanese == "葬送のフリーレン"
+    assert entry.title == "Sousou no Frieren"
     assert entry.synonyms == ["Frieren at the Funeral"]
 
 
