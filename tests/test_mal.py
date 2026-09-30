@@ -46,3 +46,25 @@ def test_empty_query_makes_no_request():
     http = FakeHttp({"data": []})
     assert MalLookup(http).search("  ") == []
     assert http.urls == []
+
+
+def test_move_to_japanese_name(tmp_path):
+    from animepahe_dl.animepahe import Episode
+    from animepahe_dl.config import Settings
+    from animepahe_dl.downloader import build_output_path, move_to_japanese_name
+
+    settings = Settings(download_dir=str(tmp_path))
+    ep = Episode(number=1, session="s")
+    old = build_output_path(settings, "Frieren", ep, 1080, "jpn")
+    old.parent.mkdir(parents=True)
+    old.write_bytes(b"x")
+    other = build_output_path(settings, "Frieren", Episode(number=2, session="t"), 1080, "jpn")
+    other.write_bytes(b"y")
+
+    new = move_to_japanese_name(settings, "葬送のフリーレン", ep, 1080, "jpn", old)
+    assert new == tmp_path / "葬送のフリーレン" / "葬送のフリーレン - Episode 01.mp4"
+    assert new.read_bytes() == b"x" and not old.exists()
+    assert other.exists()  # old folder kept while another episode is still in it
+
+    new2 = move_to_japanese_name(settings, "葬送のフリーレン", Episode(number=2, session="t"), 1080, "jpn", other)
+    assert new2.exists() and not (tmp_path / "Frieren").exists()  # emptied folder removed

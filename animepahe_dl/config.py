@@ -41,6 +41,8 @@ class Settings:
     max_parallel_episodes: int = 2
     segment_workers: int = 8
     ffmpeg_path: str = ""
+    # After a download finishes, rename the file and folder to the anime's Japanese title (MyAnimeList).
+    rename_japanese: bool = False
     filename_template: str = "{anime} - Episode {episode}"
     # Identity captured from the Cloudflare verification browser. Cloudflare binds
     # the cf_clearance cookie to the browser's User-Agent, so both must be reused.

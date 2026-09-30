@@ -18,6 +18,9 @@ downloads the episodes you pick, several at a time, as `.mp4` files.
   The app then reuses that browser's cookie and User-Agent.
 - **Japanese title lookup.** Type an English title and click **日本語** (or run `cli japanese "…"`)
   to get its Japanese title from MyAnimeList, through the free Jikan API.
+- **Rename to Japanese.** Turn on *Rename file and folder to the Japanese title* in Settings (or pass
+  `--japanese-names` to `cli download`). You still search AnimePahe in English; once an episode finishes,
+  its file and folder are renamed to the Japanese title. If MyAnimeList has no match, the English name is kept.
 - Light and dark mode that follows Windows. There is also a command-line mode for scripting.
 
 ## Install

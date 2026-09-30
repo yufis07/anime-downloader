@@ -69,6 +69,8 @@ def cmd_download(args: argparse.Namespace) -> int:
         settings.download_dir = args.output
     if args.parallel:
         settings.max_parallel_episodes = args.parallel
+    if args.japanese_names:
+        settings.rename_japanese = True
     settings.normalize()
 
     session = parse_anime_session(args.anime)
@@ -133,6 +135,8 @@ def main(argv: list[str] | None = None) -> int:
     download.add_argument("-a", "--audio", choices=("jpn", "eng", "any"))
     download.add_argument("-o", "--output", help="Download folder")
     download.add_argument("-p", "--parallel", type=int, help="Episodes downloaded at the same time")
+    download.add_argument("--japanese-names", action="store_true",
+                          help="Rename the file and folder to the Japanese title (MyAnimeList) once downloaded")
     download.set_defaults(func=cmd_download)
 
     args = parser.parse_args(argv)
