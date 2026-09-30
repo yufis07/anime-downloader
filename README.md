@@ -130,6 +130,9 @@ Run the tests with `python -m pytest -q`.
 
 ## Troubleshooting
 
+- **"… answered with a web page … instead of AnimePahe search data."** The Site address points to a
+  look-alike site that uses the AnimePahe name, for example animepahe.ch. Set it to the real address,
+  currently `https://animepahe.pw`, and use **Test** next to Site address in Settings to confirm it works.
 - **"The site is asking for a Cloudflare/DDoS-Guard browser check."** Click **Cloudflare check** in the sidebar.
   Cloudflare cookies expire, and they also stop working when your IP changes.
 - **"No video sources found."** The site layout or address has probably changed.

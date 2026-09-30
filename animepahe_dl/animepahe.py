@@ -9,7 +9,7 @@ from html.parser import HTMLParser
 from typing import Callable
 from urllib.parse import quote_plus, urlsplit
 
-from .http import HttpClient, HttpError
+from .http import CloudflareChallenge, HttpClient, HttpError, is_challenge
 
 _UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 
@@ -64,6 +64,15 @@ class Source:
         if self.av1:
             parts.append("AV1")
         return " · ".join(parts)
+
+
+class NotAnimePahe(HttpError):
+    """The configured address answered, but not like AnimePahe (e.g. a look-alike site)."""
+
+
+def _page_title(page: str) -> str:
+    match = re.search(r"<title[^>]*>(.*?)</title>", page, re.I | re.S)
+    return html_lib.unescape(" ".join(match.group(1).split()))[:80] if match else ""
 
 
 class _SourceParser(HTMLParser):
@@ -155,15 +164,36 @@ class AnimePahe:
         return self.base_url + "/"
 
     def _api(self, query: str) -> dict:
-        data = self.http.get_json(
-            f"{self.base_url}/api?{query}",
+        url = f"{self.base_url}/api?{query}"
+        resp = self.http.get(
+            url,
             referer=self.referer,
             headers={"Accept": "application/json, text/javascript, */*; q=0.01",
                      "X-Requested-With": "XMLHttpRequest"},
         )
-        if not isinstance(data, dict):
-            raise HttpError("Unexpected API response")
-        return data
+        try:
+            data = resp.json()
+        except ValueError:
+            data = None
+        if isinstance(data, dict):
+            return data
+        if is_challenge(403, resp.headers, resp.content):
+            raise CloudflareChallenge("Cloudflare challenge page returned instead of search data.")
+        host = urlsplit(self.base_url).hostname or self.base_url
+        final_host = urlsplit(resp.url).hostname or host
+        title = _page_title(resp.text)
+        detail = f"a web page titled \u201c{title}\u201d" if title else "a normal web page"
+        if final_host != host:
+            detail += f" (after redirecting to {final_host})"
+        raise NotAnimePahe(
+            f"{host} answered with {detail} instead of AnimePahe search data, so it is probably not the "
+            f"real AnimePahe site. Open Settings and set Site address to the current AnimePahe address, "
+            f"for example https://animepahe.pw."
+        )
+
+    def check_site(self) -> int:
+        """Run a small search to confirm the address is a working AnimePahe site; returns result count."""
+        return len(self.search("naruto"))
 
     # ----------------------------------------------------------------- search
     def search(self, query: str) -> list[Anime]:

@@ -210,3 +210,32 @@ def test_pause_holds_segment_workers(tmp_path):
     threading.Timer(0.6, cancel.set).start()
     with pytest.raises(Cancelled):
         dl.download(tmp_path / "out.ts")
+
+
+def test_lookalike_site_gives_clear_error(monkeypatch):
+    """A site that answers /api with its homepage (e.g. a WordPress look-alike) must say so clearly."""
+    from animepahe_dl.animepahe import NotAnimePahe
+
+    class LookAlike(FakeSite):
+        def do_GET(self):  # every path returns the same HTML homepage
+            return self._send("<!DOCTYPE html><html><head><title>Animepahe | Watch Free Anime Online</title>"
+                              "</head><body>wp-content</body></html>")
+
+    for var in ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("NO_PROXY", "*")
+    server = ThreadingHTTPServer(("127.0.0.1", 0), LookAlike)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        api = AnimePahe(HttpClient(retries=0), f"http://127.0.0.1:{server.server_address[1]}")
+        with pytest.raises(NotAnimePahe) as info:
+            api.search("one piece")
+        message = str(info.value)
+        assert "Animepahe | Watch Free Anime Online" in message
+        assert "not the real AnimePahe" in message and "Site address" in message
+    finally:
+        server.shutdown()
+
+
+def test_check_site_on_real_layout(site):
+    assert AnimePahe(HttpClient(retries=0), site).check_site() == 1

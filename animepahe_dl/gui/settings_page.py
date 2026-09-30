@@ -10,7 +10,9 @@ from PySide6.QtWidgets import (
     QScrollArea, QSpinBox, QVBoxLayout, QWidget,
 )
 
+from ..animepahe import AnimePahe
 from ..config import AUDIO_CHOICES, QUALITIES
+from ..http import CloudflareChallenge, HttpClient
 from ..utils import find_ffmpeg
 from .search_page import AUDIO_LABELS
 from .theme import emphasize
@@ -119,7 +121,15 @@ class SettingsPage(QWidget):
                                                   "(.pw, .si, .ru, .com…). Cloudflare cookies expire, "
                                                   "or stop working when your IP changes.")
         self.base_url = QLineEdit()
-        form.addRow("Site address", self.base_url)
+        self.base_url.setPlaceholderText("https://animepahe.pw")
+        self.test_btn = QPushButton("Test")
+        self.test_btn.setToolTip("Check that this address is a working AnimePahe site")
+        self.test_btn.clicked.connect(self._test_site)
+        form.addRow("Site address", _row(self.base_url, self.test_btn))
+        self.site_status = QLabel("")
+        self.site_status.setObjectName("muted")
+        self.site_status.setWordWrap(True)
+        form.addRow("", self.site_status)
         self.cf_status = QLabel()
         self.cf_status.setObjectName("muted")
         verify = QPushButton("Verify in browser")
@@ -159,6 +169,7 @@ class SettingsPage(QWidget):
         self._update_ffmpeg_status()
         self._update_cf_status()
         self.saved_label.setText("")
+        self.site_status.setText("")
 
     def save(self) -> None:
         s = self.ctx.settings
@@ -176,6 +187,31 @@ class SettingsPage(QWidget):
         self.base_url.setText(s.base_url)
         self.saved_label.setText("✔ Settings saved")
         self.saved.emit()
+
+    def _test_site(self) -> None:
+        from ..config import Settings
+
+        probe = Settings(base_url=self.base_url.text())
+        probe.normalize()
+        s = self.ctx.settings
+        api = AnimePahe(HttpClient(s.user_agent, s.cookies, retries=1), probe.base_url)
+        self.test_btn.setEnabled(False)
+        self.site_status.setText(f"Testing {probe.base_url}…")
+
+        def ok(count: int) -> None:
+            self.test_btn.setEnabled(True)
+            self.site_status.setText(f"✔ {probe.base_url} is working ({count} results for a test search). "
+                                     "Click Save settings to use it.")
+
+        def failed(exc: Exception) -> None:
+            self.test_btn.setEnabled(True)
+            if isinstance(exc, CloudflareChallenge):
+                self.site_status.setText("This address needs the Cloudflare check first. Save settings, "
+                                         "then click Verify in browser.")
+            else:
+                self.site_status.setText(f"✖ {exc}")
+
+        self.ctx.jobs.submit(api.check_site, ok, failed)
 
     def _update_ffmpeg_status(self) -> None:
         found = find_ffmpeg(self.ffmpeg.text().strip())
