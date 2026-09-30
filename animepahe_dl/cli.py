@@ -3,6 +3,7 @@
 Examples::
 
     AnimePaheDL.exe cli search "frieren"
+    AnimePaheDL.exe cli japanese "Frieren: Beyond Journey's End"
     AnimePaheDL.exe cli download https://animepahe.pw/anime/<uuid> -e 1-12 -q 720 -a eng
 """
 
@@ -15,7 +16,8 @@ import time
 from .animepahe import AnimePahe, parse_anime_session
 from .config import Settings
 from .downloader import DownloadManager, Status
-from .http import CloudflareChallenge, HttpClient
+from .http import CloudflareChallenge, HttpClient, HttpError
+from .mal import MalLookup
 from .utils import format_episode, format_speed, parse_episode_selection
 
 
@@ -42,6 +44,20 @@ def cmd_search(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_japanese(args: argparse.Namespace) -> int:
+    try:
+        match = MalLookup().japanese_title(args.title)
+    except HttpError as exc:
+        print(f"MyAnimeList lookup failed: {exc}", file=sys.stderr)
+        return 2
+    if not match:
+        print("No match found on MyAnimeList.")
+        return 1
+    print(match.title)
+    print(f"  {match.url}")
+    return 0
+
+
 def cmd_download(args: argparse.Namespace) -> int:
     settings, api = _build(args)
     if args.quality:
@@ -52,6 +68,8 @@ def cmd_download(args: argparse.Namespace) -> int:
         settings.download_dir = args.output
     if args.parallel:
         settings.max_parallel_episodes = args.parallel
+    if args.japanese_names:
+        settings.rename_japanese = True
     settings.normalize()
 
     session = parse_anime_session(args.anime)
@@ -105,6 +123,10 @@ def main(argv: list[str] | None = None) -> int:
     search.add_argument("query")
     search.set_defaults(func=cmd_search)
 
+    japanese = sub.add_parser("japanese", help="Look up an English title on MyAnimeList and print its Japanese (romaji) title")
+    japanese.add_argument("title")
+    japanese.set_defaults(func=cmd_japanese)
+
     download = sub.add_parser("download", help="Download episodes")
     download.add_argument("anime", help="Anime URL, session id or search text (first hit is used)")
     download.add_argument("-e", "--episodes", default="all", help="e.g. 1-12,15 or 20- (default: all)")
@@ -112,6 +134,8 @@ def main(argv: list[str] | None = None) -> int:
     download.add_argument("-a", "--audio", choices=("jpn", "eng", "any"))
     download.add_argument("-o", "--output", help="Download folder")
     download.add_argument("-p", "--parallel", type=int, help="Episodes downloaded at the same time")
+    download.add_argument("--japanese-names", action="store_true",
+                          help="Rename the file and folder to the Japanese title (MyAnimeList) once downloaded")
     download.set_defaults(func=cmd_download)
 
     args = parser.parse_args(argv)
