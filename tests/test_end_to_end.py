@@ -174,3 +174,39 @@ def test_segment_failure_is_reported_as_failure(site, tmp_path, monkeypatch):
     assert task.status == Status.FAILED
     assert "404" in task.message
     manager.shutdown()
+
+
+def test_pause_and_resume(site, tmp_path, monkeypatch):
+    monkeypatch.setattr(dl_module, "find_ffmpeg", lambda _p="": None)
+    api = AnimePahe(HttpClient(retries=0), site)
+    manager = DownloadManager(api, Settings(base_url=site, download_dir=str(tmp_path)))
+    manager.pause_all()
+    assert manager.paused
+    tasks = manager.add("X", ANIME, api.episodes(ANIME)[:2])
+    import time
+
+    time.sleep(1.0)
+    assert all(t.status == Status.QUEUED for t in tasks), "nothing may start while paused"
+    manager.resume_all()
+    manager.wait_all(poll=0.1)
+    assert [t.status for t in tasks] == [Status.DONE, Status.DONE]
+    assert tasks[0].speed == 0.0  # idle tasks report no speed
+    manager.shutdown()
+
+
+def test_pause_holds_segment_workers(tmp_path):
+    """A paused HlsDownloader must not fetch; cancelling while paused ends it."""
+    import threading
+
+    from animepahe_dl.hls import Cancelled, HlsDownloader, Segment
+
+    class NoNetwork:
+        def get_bytes(self, *a, **k):
+            raise AssertionError("must not fetch while paused")
+
+    gate, cancel = threading.Event(), threading.Event()
+    segs = [Segment(index=i, url=f"http://x/{i}", duration=1, sequence=i) for i in range(3)]
+    dl = HlsDownloader(NoNetwork(), segs, "r", tmp_path / "w", workers=2, cancel_event=cancel, pause_gate=gate)
+    threading.Timer(0.6, cancel.set).start()
+    with pytest.raises(Cancelled):
+        dl.download(tmp_path / "out.ts")

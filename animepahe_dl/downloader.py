@@ -26,8 +26,8 @@ class Status(str, Enum):
     QUEUED = "Queued"
     RESOLVING = "Resolving"
     DOWNLOADING = "Downloading"
-    MUXING = "Converting"
-    DONE = "Done"
+    MUXING = "Stitching via FFmpeg"
+    DONE = "Completed"
     SKIPPED = "Already exists"
     FAILED = "Failed"
     CANCELLED = "Cancelled"
@@ -51,12 +51,44 @@ class DownloadTask:
     segments_done: int = 0
     segments_total: int = 0
     bytes_done: int = 0
-    speed: float = 0.0
     message: str = ""
     output_path: str = ""
     cloudflare_blocked: bool = False
     cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
     _speed_window: list[tuple[float, int]] = field(default_factory=list, repr=False)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    SPEED_WINDOW = 5.0  # seconds
+
+    def record_bytes(self, count: int) -> None:
+        now = time.monotonic()
+        with self._lock:
+            self.bytes_done += count
+            self._speed_window.append((now, count))
+            self._trim(now)
+
+    def _trim(self, now: float) -> None:
+        while self._speed_window and now - self._speed_window[0][0] > self.SPEED_WINDOW:
+            self._speed_window.pop(0)
+
+    @property
+    def speed(self) -> float:
+        """Average bytes/second over the last few seconds (0 when nothing is flowing)."""
+        if self.status != Status.DOWNLOADING:
+            return 0.0
+        now = time.monotonic()
+        with self._lock:
+            self._trim(now)
+            if not self._speed_window:
+                return 0.0
+            span = max(now - self._speed_window[0][0], 1.0)
+            return sum(b for _, b in self._speed_window) / span
+
+    def reset_progress(self) -> None:
+        with self._lock:
+            self.bytes_done = 0
+            self.segments_done = 0
+            self._speed_window.clear()
 
     @property
     def progress(self) -> float:
@@ -96,7 +128,8 @@ def remux_to_mp4(ffmpeg: str, source: Path, target: Path) -> None:
     proc = subprocess.run(cmd, capture_output=True, text=True, **kwargs)  # noqa: S603
     if proc.returncode != 0 or not tmp.exists():
         tmp.unlink(missing_ok=True)
-        raise RuntimeError(f"ffmpeg failed: {proc.stderr.strip()[-300:]}")
+        lines = [line.strip() for line in proc.stderr.splitlines() if line.strip()]
+        raise RuntimeError(f"ffmpeg failed: {lines[-1][:200] if lines else f'exit code {proc.returncode}'}")
     os.replace(tmp, target)
 
 
@@ -112,6 +145,8 @@ class DownloadManager:
         self._cond = threading.Condition()
         self._active = 0
         self._stopping = False
+        self._run_gate = threading.Event()  # cleared while paused
+        self._run_gate.set()
         self._dispatcher = threading.Thread(target=self._dispatch_loop, name="dispatcher", daemon=True)
         self._dispatcher.start()
 
@@ -163,6 +198,19 @@ class DownloadManager:
         with self._cond:
             self._tasks = [t for t in self._tasks if not t.status.finished]
 
+    @property
+    def paused(self) -> bool:
+        return not self._run_gate.is_set()
+
+    def pause_all(self) -> None:
+        """Stop starting new episodes and hold running ones between segments."""
+        self._run_gate.clear()
+
+    def resume_all(self) -> None:
+        self._run_gate.set()
+        with self._cond:
+            self._cond.notify_all()
+
     def is_busy(self) -> bool:
         with self._cond:
             return any(not t.status.finished for t in self._tasks)
@@ -173,6 +221,7 @@ class DownloadManager:
 
     def shutdown(self) -> None:
         self.cancel_all()
+        self._run_gate.set()  # release anything waiting on pause
         with self._cond:
             self._stopping = True
             self._cond.notify_all()
@@ -182,10 +231,7 @@ class DownloadManager:
     def _reset(task: DownloadTask) -> None:
         task.status = Status.QUEUED
         task.message = ""
-        task.speed = 0.0
-        task.bytes_done = 0
-        task.segments_done = 0
-        task._speed_window.clear()
+        task.reset_progress()
         task.cloudflare_blocked = False
         task.cancel_event = threading.Event()
 
@@ -193,7 +239,8 @@ class DownloadManager:
         while True:
             with self._cond:
                 while not self._stopping and (
-                    self._active >= self.settings.max_parallel_episodes
+                    self.paused
+                    or self._active >= self.settings.max_parallel_episodes
                     or not any(t.status == Status.QUEUED for t in self._tasks)
                 ):
                     self._cond.wait(timeout=1.0)
@@ -220,7 +267,6 @@ class DownloadManager:
             task.status = Status.CANCELLED if task.cancel_event.is_set() else Status.FAILED
             task.message = "Cancelled" if task.cancel_event.is_set() else str(exc)
         finally:
-            task.speed = 0.0
             with self._cond:
                 self._active -= 1
                 self._cond.notify_all()
@@ -259,16 +305,9 @@ class DownloadManager:
         )
 
         def on_progress(done: int, total: int, added: int) -> None:
-            now = time.monotonic()
             task.segments_done, task.segments_total = done, total
             if added:
-                task.bytes_done += added
-                window = task._speed_window
-                window.append((now, added))
-                while window and now - window[0][0] > 5:
-                    window.pop(0)
-                span = max(now - window[0][0], 1.0)
-                task.speed = sum(b for _, b in window) / span
+                task.record_bytes(added)
 
         task.status = Status.DOWNLOADING
         task.message = ""
@@ -276,16 +315,16 @@ class DownloadManager:
         HlsDownloader(
             self.api.http, segments, stream.referer, work_dir,
             workers=settings.segment_workers, cancel_event=task.cancel_event, progress=on_progress,
+            pause_gate=self._run_gate,
         ).download(combined)
 
         self._check_cancel(task)
         task.status = Status.MUXING
-        task.speed = 0.0
         final_mp4.parent.mkdir(parents=True, exist_ok=True)
         ffmpeg = find_ffmpeg(settings.ffmpeg_path)
         output = final_mp4
         if ffmpeg:
-            task.message = "Converting to MP4"
+            task.message = "Joining segments into MP4"
             try:
                 remux_to_mp4(ffmpeg, combined, final_mp4)
             except RuntimeError as exc:

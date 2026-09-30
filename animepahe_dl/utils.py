@@ -75,7 +75,10 @@ def format_bytes(size: float) -> str:
 
 
 def format_speed(bytes_per_second: float) -> str:
-    return f"{format_bytes(bytes_per_second)}/s" if bytes_per_second > 0 else ""
+    """Download speed in MB/s, e.g. '3.42 MB/s' ('' when idle)."""
+    if bytes_per_second <= 0:
+        return ""
+    return f"{bytes_per_second / (1024 * 1024):.2f} MB/s"
 
 
 def find_ffmpeg(configured: str = "") -> str | None:

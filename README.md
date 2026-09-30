@@ -3,7 +3,7 @@
 A desktop app that searches [AnimePahe](https://animepahe.pw), lists every episode of a show and
 downloads the episodes you pick, several at a time, as `.mp4` files.
 
-![Browse tab: search results on the left, episode checklist on the right](docs/browse.png)
+![Search & Discover: result cards with cover art, release info and a View Episodes button](docs/search.png)
 
 ## Features
 
@@ -51,21 +51,33 @@ You can also point to `ffmpeg.exe` in **Settings**.
 
 ## How to use
 
-1. Type a title and press **Enter**.
-2. Click a result to load its episodes.
-3. Tick episodes, or type a range and press **Select range**.
-4. Choose quality and audio, then click **Download selected**.
-5. Watch progress in the **Downloads** tab. Double-click a finished row to open its folder.
+The sidebar on the left has three sections: **Search & Discover**, **Download Queue** and **Settings**.
+
+1. **Search & Discover.** Type a title and press **Enter** or **Search**. Results appear as cards with
+   cover art, title, release season, episode count and score.
+2. Click **View Episodes** on a card. The episode panel lists every episode with a checkbox.
+   Use **Select All**, click individual rows, or type a range and press **Select range**.
+3. Pick quality and audio, then click **Add N to Queue**. The app switches to the queue.
+4. **Download Queue.** Each episode has its own progress bar, live speed in MB/s and a status:
+   Queued, Resolving, Downloading, Stitching via FFmpeg, Completed or Failed.
+   **Pause All** holds every download and turns into **Resume All**. Rows also offer
+   Cancel, Retry and Show in folder.
+5. **Settings.** Set the download folder, file-name pattern, default quality and audio, how many
+   episodes run at once, the ffmpeg location, and the site address.
+
+![Episode selection with checkboxes, Select All and Add to Queue](docs/episodes.png)
+
+![Download queue with per-episode progress, speed and status](docs/queue.png)
 
 Files are saved to `Videos\Anime\<Anime title>\<Anime title> - Episode 01.mp4` by default.
-You can change the folder and the file-name pattern in **Settings**. The pattern accepts
-`{anime}`, `{episode}`, `{quality}`, `{audio}` and `{title}`.
+The file-name pattern accepts `{anime}`, `{episode}`, `{quality}`, `{audio}` and `{title}`.
 
 ### The "Verify in browser" window
 
 AnimePahe sits behind Cloudflare. When the site asks for a check, the app opens a browser
 window on its own. Complete the check and the window closes by itself. Downloads that were
-blocked are then retried. You can open this window at any time with **Verify in browser**.
+blocked are then retried. You can open this window at any time with **Cloudflare check** in the
+sidebar or **Verify in browser** in Settings.
 
 If the check keeps failing, use **Enter cookie manually…**. In Chrome or Edge, open the site,
 press F12, go to Application → Cookies, and copy `cf_clearance`. Then copy the browser's
@@ -110,7 +122,7 @@ Settings and the browser profile live in `%APPDATA%\AnimePaheDL`.
 | `animepahe_dl/hls.py` | HLS parser and parallel AES-128 segment downloader with resume |
 | `animepahe_dl/downloader.py` | Download queue, parallel episodes, ffmpeg remux |
 | `animepahe_dl/http.py` | HTTP client with Chrome TLS impersonation, retries and challenge detection |
-| `animepahe_dl/gui/` | PySide6 (Qt 6) user interface and the Cloudflare verification browser |
+| `animepahe_dl/gui/` | PySide6 (Qt 6) interface: sidebar window, search/queue/settings pages, cards, theme, verification browser |
 | `animepahe_dl/cli.py` | Command-line interface |
 | `tests/` | Unit tests plus an offline end-to-end test against a fake local site |
 
@@ -118,7 +130,7 @@ Run the tests with `python -m pytest -q`.
 
 ## Troubleshooting
 
-- **"The site is asking for a Cloudflare/DDoS-Guard browser check."** Click **Verify in browser**.
+- **"The site is asking for a Cloudflare/DDoS-Guard browser check."** Click **Cloudflare check** in the sidebar.
   Cloudflare cookies expire, and they also stop working when your IP changes.
 - **"No video sources found."** The site layout or address has probably changed.
   Check the address in Settings.

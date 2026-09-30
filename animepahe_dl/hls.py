@@ -140,6 +140,7 @@ class HlsDownloader:
         workers: int = 8,
         cancel_event: threading.Event | None = None,
         progress: ProgressCallback | None = None,
+        pause_gate: threading.Event | None = None,
     ) -> None:
         self.http = http
         self.segments = segments
@@ -148,6 +149,7 @@ class HlsDownloader:
         self.workers = max(1, workers)
         self.cancel_event = cancel_event or threading.Event()
         self._stop = threading.Event()  # set when a segment fails for good
+        self.pause_gate = pause_gate  # set = running, cleared = paused
         self.progress = progress
         self._keys: dict[str, bytes] = {}
         self._key_lock = threading.Lock()
@@ -188,10 +190,18 @@ class HlsDownloader:
         if self.progress:
             self.progress(done, len(self.segments), added)
 
+    def _wait_if_paused(self) -> None:
+        if self.pause_gate is None:
+            return
+        while not self.pause_gate.wait(0.25):
+            if self.cancel_event.is_set() or self._stop.is_set():
+                raise Cancelled()
+
     def _fetch(self, segment: Segment) -> None:
         target = self._segment_path(segment)
         if target.exists():
             return
+        self._wait_if_paused()
         for attempt in range(5):
             if self.cancel_event.is_set() or self._stop.is_set():
                 raise Cancelled()
