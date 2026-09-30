@@ -1,4 +1,7 @@
-"""MyAnimeList lookup: turn an English (or romaji) anime title into the Japanese title.
+"""MyAnimeList lookup: turn an English anime title into the Japanese (romaji) title.
+
+MyAnimeList's default title is the romaji one, e.g. "Sousou no Frieren" for "Frieren: Beyond
+Journey's End". ``MalTitle.title`` is that name; ``title_japanese`` is the kanji/kana version.
 
 MyAnimeList's own API needs a client id, so this uses Jikan (https://jikan.moe), the public
 read-only API that mirrors MyAnimeList's data and needs no key.
@@ -53,10 +56,9 @@ def _parse_entry(item: dict) -> MalTitle:
 
 
 def best_match(query: str, candidates: list[MalTitle]) -> MalTitle | None:
-    """Pick the candidate whose English/romaji/synonym title equals the query, else the top hit
-    that has a Japanese title. Returns None when nothing has a Japanese title."""
+    """Pick the candidate whose English/romaji/synonym title equals the query, else the top hit."""
     wanted = _normalize(query)
-    usable = [c for c in candidates if c.title_japanese]
+    usable = [c for c in candidates if c.title]
     for candidate in usable:
         if wanted in {_normalize(n) for n in candidate.names}:
             return candidate
@@ -78,5 +80,5 @@ class MalLookup:
         return [_parse_entry(item) for item in data.get("data") or []]
 
     def japanese_title(self, english_title: str) -> MalTitle | None:
-        """Look ``english_title`` up on MyAnimeList; the result's ``title_japanese`` is the answer."""
+        """Look ``english_title`` up on MyAnimeList; the result's ``title`` is the romaji title."""
         return best_match(english_title, self.search(english_title))

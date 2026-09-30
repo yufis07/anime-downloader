@@ -49,8 +49,8 @@ class SearchPage(QWidget):
         self.search_btn.setObjectName("searchButton")
         self.search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.search_btn.clicked.connect(self.search)
-        self.jp_btn = QPushButton("日本語")
-        self.jp_btn.setToolTip("Look the English title up on MyAnimeList and show its Japanese title")
+        self.jp_btn = QPushButton("Japanese title")
+        self.jp_btn.setToolTip("Look the English title up on MyAnimeList and show its Japanese (romaji) title")
         self.jp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.jp_btn.clicked.connect(self.lookup_japanese)
         bar.addWidget(self.input, 1)
@@ -126,9 +126,9 @@ class SearchPage(QWidget):
         def done(match) -> None:  # type: ignore[no-untyped-def]
             self.jp_btn.setEnabled(True)
             if match:
-                self.jp_label.setText(f"{match.title_japanese}   ({match.title_english or match.title})")
+                self.jp_label.setText(match.title)
             else:
-                self.jp_label.setText("No Japanese title found on MyAnimeList.")
+                self.jp_label.setText("No match found on MyAnimeList.")
 
         def failed(exc: Exception) -> None:
             self.jp_btn.setEnabled(True)

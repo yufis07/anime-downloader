@@ -29,16 +29,16 @@ def test_best_match_prefers_exact_english_name():
     assert best_match("frieren: beyond journey's end", candidates).mal_id == 52991
 
 
-def test_best_match_skips_entries_without_japanese_title():
+def test_best_match_falls_back_to_top_hit():
     candidates = [_parse_entry(OTHER), _parse_entry(OTHER_JP)]
-    assert best_match("Frieren", candidates).mal_id == 2
-    assert best_match("x", [_parse_entry(OTHER)]) is None
+    assert best_match("Frieren", candidates).mal_id == 1
+    assert best_match("x", []) is None
 
 
 def test_japanese_title_lookup():
     http = FakeHttp({"data": [OTHER, FRIEREN]})
     result = MalLookup(http).japanese_title("Frieren: Beyond Journey's End")
-    assert result.title_japanese == "葬送のフリーレン"
+    assert result.title == "Sousou no Frieren"
     assert "q=Frieren%3A+Beyond" in http.urls[0]
 
 
@@ -61,10 +61,10 @@ def test_move_to_japanese_name(tmp_path):
     other = build_output_path(settings, "Frieren", Episode(number=2, session="t"), 1080, "jpn")
     other.write_bytes(b"y")
 
-    new = move_to_japanese_name(settings, "葬送のフリーレン", ep, 1080, "jpn", old)
-    assert new == tmp_path / "葬送のフリーレン" / "葬送のフリーレン - Episode 01.mp4"
+    new = move_to_japanese_name(settings, "Sousou no Frieren", ep, 1080, "jpn", old)
+    assert new == tmp_path / "Sousou no Frieren" / "Sousou no Frieren - Episode 01.mp4"
     assert new.read_bytes() == b"x" and not old.exists()
     assert other.exists()  # old folder kept while another episode is still in it
 
-    new2 = move_to_japanese_name(settings, "葬送のフリーレン", Episode(number=2, session="t"), 1080, "jpn", other)
+    new2 = move_to_japanese_name(settings, "Sousou no Frieren", Episode(number=2, session="t"), 1080, "jpn", other)
     assert new2.exists() and not (tmp_path / "Frieren").exists()  # emptied folder removed

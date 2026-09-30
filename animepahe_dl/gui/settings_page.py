@@ -94,7 +94,7 @@ class SettingsPage(QWidget):
         form.addRow("Audio", self.audio)
         self.no_av1 = QCheckBox("Prefer H.264 over AV1 (plays on more devices)")
         form.addRow("", self.no_av1)
-        self.rename_jp = QCheckBox("Rename file and folder to the Japanese title when a download finishes "
+        self.rename_jp = QCheckBox("Rename file and folder to the Japanese (romaji) title when a download finishes "
                                    "(looked up on MyAnimeList)")
         form.addRow("", self.rename_jp)
         self.parallel = QSpinBox()

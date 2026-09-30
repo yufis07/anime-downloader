@@ -121,7 +121,7 @@ def build_output_path(settings: Settings, anime_title: str, episode: Episode, re
 
 def move_to_japanese_name(settings: Settings, japanese_title: str, episode: Episode, resolution: int,
                           audio: str, current: Path) -> Path:
-    """Move a finished download to the folder/file name built from the Japanese title.
+    """Move a finished download to the folder/file name built from the Japanese (romaji) title.
 
     Files are moved one by one (not the whole folder) so episodes still downloading into the
     old folder are not disturbed; the old folder is removed once it is empty. An existing file
@@ -298,7 +298,7 @@ class DownloadManager:
                 self._cond.notify_all()
 
     def japanese_title(self, anime_title: str) -> str | None:
-        """Japanese title from MyAnimeList (cached per anime); None when unavailable."""
+        """Japanese (romaji) title from MyAnimeList (cached per anime); None when unavailable."""
         with self._mal_lock:
             if anime_title in self._japanese_cache:
                 return self._japanese_cache[anime_title]
@@ -308,7 +308,7 @@ class DownloadManager:
                 match = self._mal.japanese_title(anime_title)
             except Exception:  # noqa: BLE001 - lookup is optional; keep the English name
                 return None  # not cached, so the next episode tries again
-            title = match.title_japanese if match else None
+            title = match.title if match else None
             self._japanese_cache[anime_title] = title
             return title
 
@@ -397,6 +397,6 @@ class DownloadManager:
                 except OSError as exc:
                     task.message = f"Kept English name ({exc})"
             else:
-                task.message = "Kept English name (no Japanese title found on MyAnimeList)"
+                task.message = "Kept English name (no match found on MyAnimeList)"
         task.output_path = str(output)
         task.status = Status.DONE

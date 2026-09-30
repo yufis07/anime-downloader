@@ -51,10 +51,11 @@ def cmd_japanese(args: argparse.Namespace) -> int:
         print(f"MyAnimeList lookup failed: {exc}", file=sys.stderr)
         return 2
     if not match:
-        print("No Japanese title found on MyAnimeList.")
+        print("No match found on MyAnimeList.")
         return 1
-    print(match.title_japanese)
-    print(f"  {match.title}" + (f" / {match.title_english}" if match.title_english else ""))
+    print(match.title)
+    if match.title_japanese:
+        print(f"  {match.title_japanese}")
     print(f"  {match.url}")
     return 0
 
@@ -124,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
     search.add_argument("query")
     search.set_defaults(func=cmd_search)
 
-    japanese = sub.add_parser("japanese", help="Look up an English title on MyAnimeList and print its Japanese title")
+    japanese = sub.add_parser("japanese", help="Look up an English title on MyAnimeList and print its Japanese (romaji) title")
     japanese.add_argument("title")
     japanese.set_defaults(func=cmd_japanese)
 
