@@ -10,8 +10,8 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -27,7 +27,7 @@ jobs:
         run: |
           $p = Start-Process -FilePath dist\AnimePaheDL\AnimePaheDL.exe -ArgumentList "cli","--help" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "exe failed with $($p.ExitCode)" }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: AnimePaheDL-windows-x64
           path: dist/AnimePaheDL

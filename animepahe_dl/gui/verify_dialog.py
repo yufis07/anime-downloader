@@ -25,6 +25,11 @@ try:
 except ImportError:  # pragma: no cover
     HAS_WEBENGINE = False
 
+try:  # Qt 6.9+: the recommended way to configure a profile's storage before it is created
+    from PySide6.QtWebEngineCore import QWebEngineProfileBuilder
+except ImportError:  # pragma: no cover - Qt 6.7/6.8
+    QWebEngineProfileBuilder = None
+
 from ..config import app_data_dir
 
 _CHALLENGE_TITLES = ("just a moment", "attention required", "ddos-guard", "checking your browser",
@@ -38,11 +43,19 @@ def _shared_profile():  # type: ignore[no-untyped-def]
     if _profile is None:
         from PySide6.QtWidgets import QApplication
 
-        _profile = QWebEngineProfile("AnimePaheDL", QApplication.instance())
         storage = app_data_dir() / "browser"
-        _profile.setPersistentStoragePath(str(storage))
-        _profile.setCachePath(str(storage / "cache"))
-        _profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies)
+        cookies = QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies
+        if QWebEngineProfileBuilder is not None:
+            builder = QWebEngineProfileBuilder()
+            builder.setPersistentStoragePath(str(storage))
+            builder.setCachePath(str(storage / "cache"))
+            builder.setPersistentCookiesPolicy(cookies)
+            _profile = builder.createProfile("AnimePaheDL", QApplication.instance())
+        else:  # older Qt: configure after construction
+            _profile = QWebEngineProfile("AnimePaheDL", QApplication.instance())
+            _profile.setPersistentStoragePath(str(storage))
+            _profile.setCachePath(str(storage / "cache"))
+            _profile.setPersistentCookiesPolicy(cookies)
         # Hide the QtWebEngine token so the UA looks like regular Chrome.
         _profile.setHttpUserAgent(re.sub(r"\s*QtWebEngine/\S+", "", _profile.httpUserAgent()))
     return _profile
