@@ -21,7 +21,7 @@ downloads the episodes you pick, several at a time, as `.mp4` files.
 - **Rename to Japanese.** Turn on *Rename file and folder to the Japanese title* in Settings (or pass
   `--japanese-names` to `cli download`). You still search AnimePahe in English; once an episode finishes,
   its file and folder are renamed to the Japanese (romaji) title. The lookup uses MyAnimeList (Jikan) and falls
-  back to AniList when Jikan is down. If neither has no match, the English name is kept.
+  back to AniList when Jikan is down. If neither finds a match, the English name is kept.
 - Light and dark mode that follows Windows. There is also a command-line mode for scripting.
 
 ## Install
