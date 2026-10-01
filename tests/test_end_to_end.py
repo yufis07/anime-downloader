@@ -239,3 +239,25 @@ def test_lookalike_site_gives_clear_error(monkeypatch):
 
 def test_check_site_on_real_layout(site):
     assert AnimePahe(HttpClient(retries=0), site).check_site() == 1
+
+
+def test_download_renamed_to_japanese_title(site, tmp_path, monkeypatch):
+    from animepahe_dl.mal import MalTitle
+
+    class FakeMal:
+        def japanese_title(self, title):
+            return MalTitle(mal_id=1, title="Sousou no Test")
+
+    monkeypatch.setattr(dl_module, "find_ffmpeg", lambda _p="": None)
+    api = AnimePahe(HttpClient(retries=1), site)
+    settings = Settings(base_url=site, download_dir=str(tmp_path), max_parallel_episodes=2,
+                        segment_workers=4, rename_japanese=True)
+    manager = DownloadManager(api, settings, mal=FakeMal())
+    manager.add("Test: Anime", ANIME, api.episodes(ANIME)[:2])
+    manager.wait_all(poll=0.1)
+    tasks = manager.snapshot()
+    assert [t.status for t in tasks] == [Status.DONE, Status.DONE], [t.message for t in tasks]
+    assert tasks[0].output_path.endswith(os.path.join("Sousou no Test", "Sousou no Test - Episode 01.ts"))
+    assert all(os.path.exists(t.output_path) for t in tasks)
+    assert not (tmp_path / "Test Anime").exists()
+    manager.shutdown()
