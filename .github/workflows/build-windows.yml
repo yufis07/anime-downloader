@@ -36,12 +36,17 @@ jobs:
           name: AnimePaheDL-windows-x64
           path: dist/AnimePaheDL
       - name: Zip for release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push'
         shell: pwsh
         run: Compress-Archive -Path dist\AnimePaheDL\* -DestinationPath AnimePaheDL-windows-x64.zip
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" AnimePaheDL-windows-x64.zip --title "Anime Downloader ${{ github.ref_name }}" --generate-notes
+        run: |
+          $tag = if ("${{ github.ref }}" -like "refs/tags/v*") { "${{ github.ref_name }}" } else { "latest" }
+          if ($tag -eq "latest") { gh release delete latest --cleanup-tag --yes 2>$null }
+          $notes = "Windows build of commit ${{ github.sha }}. Unzip and run AnimePaheDL.exe."
+          gh release create $tag AnimePaheDL-windows-x64.zip --target "${{ github.sha }}" --title "Anime Downloader ($tag)" --notes $notes
+          exit 0
