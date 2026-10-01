@@ -119,6 +119,11 @@ def build_output_path(settings: Settings, anime_title: str, episode: Episode, re
     return folder / (sanitize_filename(name) + extension)
 
 
+def move_target(settings: Settings, japanese_title: str, episode: Episode, resolution: int,
+                audio: str, current: Path) -> Path:
+    return build_output_path(settings, japanese_title, episode, resolution, audio, current.suffix)
+
+
 def move_to_japanese_name(settings: Settings, japanese_title: str, episode: Episode, resolution: int,
                           audio: str, current: Path) -> Path:
     """Move a finished download to the folder/file name built from the Japanese (romaji) title.
@@ -127,7 +132,7 @@ def move_to_japanese_name(settings: Settings, japanese_title: str, episode: Epis
     old folder are not disturbed; the old folder is removed once it is empty. An existing file
     at the destination is never overwritten.
     """
-    target = build_output_path(settings, japanese_title, episode, resolution, audio, current.suffix)
+    target = move_target(settings, japanese_title, episode, resolution, audio, current)
     if target == current:
         return current
     if target.exists():
@@ -165,6 +170,7 @@ class DownloadManager:
         self.settings = settings
         self._mal = mal
         self._japanese_cache: dict[str, str | None] = {}
+        self._japanese_error = ""  # reason of the last failed lookup, shown on the task
         self._mal_lock = threading.Lock()  # also keeps Jikan requests to one at a time
         self.on_cloudflare = on_cloudflare
         self._tasks: list[DownloadTask] = []
@@ -306,8 +312,10 @@ class DownloadManager:
                 if self._mal is None:
                     self._mal = MalLookup()
                 match = self._mal.japanese_title(anime_title)
-            except Exception:  # noqa: BLE001 - lookup is optional; keep the English name
+            except Exception as exc:  # noqa: BLE001 - lookup is optional; keep the English name
+                self._japanese_error = str(exc)
                 return None  # not cached, so the next episode tries again
+            self._japanese_error = ""
             title = match.title if match else None
             self._japanese_cache[anime_title] = title
             return title
@@ -391,12 +399,16 @@ class DownloadManager:
         if settings.rename_japanese:
             japanese = japanese or self.japanese_title(task.anime_title)
             if japanese:
+                if output == move_target(settings, japanese, task.episode, source.resolution, source.audio, output):
+                    task.message = f"Name already matches MyAnimeList title ({japanese})"
                 try:
                     output = move_to_japanese_name(settings, japanese, task.episode, source.resolution,
                                                    source.audio, output)
                 except OSError as exc:
                     task.message = f"Kept English name ({exc})"
             else:
-                task.message = "Kept English name (no match found on MyAnimeList)"
+                reason = (f"MyAnimeList lookup failed: {self._japanese_error}" if self._japanese_error
+                          else "no match found on MyAnimeList")
+                task.message = f"Kept original name ({reason})"
         task.output_path = str(output)
         task.status = Status.DONE
