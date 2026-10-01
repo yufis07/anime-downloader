@@ -201,6 +201,38 @@ class HttpClient:
         delay = (2.0 if rate_limited else 0.5) * (2**attempt)
         time.sleep(min(delay, 20.0) + random.random() * 0.3)
 
+    def post_json(self, url: str, payload: Any, *, timeout: float | None = None, retries: int | None = None) -> Any:
+        """POST ``payload`` as JSON and return the decoded JSON answer (retries 429/5xx and network errors)."""
+        import json
+
+        attempts = (self.retries if retries is None else retries) + 1
+        last_error: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                raw = self._session().post(
+                    url, data=json.dumps(payload), timeout=timeout or self.timeout,
+                    headers={"User-Agent": self.user_agent, "Content-Type": "application/json",
+                             "Accept": "application/json"},
+                )
+                status, content = raw.status_code, raw.content
+            except Exception as exc:  # network error: retry
+                last_error = HttpError(f"Network error for {url}: {exc}")
+                self._local = threading.local()
+                self._backoff(attempt)
+                continue
+            if status == 429 or status >= 500:
+                last_error = HttpError(f"HTTP {status} for {url}", status)
+                self._backoff(attempt, rate_limited=status == 429)
+                continue
+            if status >= 400:
+                raise HttpError(f"HTTP {status} for {url}", status)
+            try:
+                return json.loads(content.decode("utf-8", "replace"))
+            except ValueError as exc:
+                raise HttpError(f"Invalid JSON from {url}") from exc
+        assert last_error is not None
+        raise last_error
+
     def get_text(self, url: str, **kwargs: Any) -> str:
         return self.get(url, **kwargs).text
 
