@@ -152,6 +152,14 @@ Run the tests with `python -m pytest -q`.
 - **Downloads are slow or fail with HTTP 429.** Lower *Episodes at once* and
   *Connections per episode* in Settings.
 
+## Support the project
+
+If this app saves you time, you can support its development:
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Kenshee-FFDD00?logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/Kenshee)
+
+Donations are optional and the app stays free. The repository's **Sponsor** button links to the same page.
+
 ## Disclaimer
 
 This tool is meant for personal use. Only download content you have the right to access, and
