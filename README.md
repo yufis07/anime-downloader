@@ -7,6 +7,11 @@ downloads the episodes you pick, several at a time, as `.mp4` files.
 
 ## Features
 
+- **Tray icon and notifications.** A tray icon shows the download status in its tooltip and has *Open*, *Pause
+  all / Resume all* and *Quit*. When you are in another app, Windows tells you when the queue finishes (one
+  line for one episode, a count for many; failures are named) and when the start-up check finds new episodes of
+  followed shows; clicking the notification opens the right page. *Closing the window keeps downloading in the
+  tray* is optional. Everything is switchable in **Settings → Tray & notifications**.
 - **Update banner.** The exe knows which commit it was built from and, a few seconds after start (at most every
   six hours), compares it with the latest GitHub release. A banner offers **Download** (opens the release page) or
   **Not now**; **Settings → Updates** has a switch and a *Check now* button. While the repository is private GitHub
@@ -145,6 +150,7 @@ Settings and the browser profile live in `%APPDATA%\AnimePaheDL`.
 | `animepahe_dl/animepahe.py` | Site API client: search, episodes, source scraping and selection |
 | `animepahe_dl/mal.py` | English title → Japanese (romaji) title lookup on MyAnimeList (Jikan API) |
 | `animepahe_dl/animeheaven.py` | AnimeHeaven client: search, episode list, direct video link |
+| `animepahe_dl/notifications.py` | Decides when to notify: queue finished summary, new watchlist episodes |
 | `animepahe_dl/updates.py` | Update check against the rolling `latest` release (compares build commits) |
 | `animepahe_dl/discover.py` | Trending / this season / top rated lists for the Discover home (AniList, cached) |
 | `animepahe_dl/details.py` | Synopsis, genres, score and banner for the show page (AniList) |

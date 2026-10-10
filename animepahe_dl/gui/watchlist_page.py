@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QScrollA
 from ..animepahe import Anime
 from ..config import SITE_LABELS
 from ..library import Followed
+from ..notifications import new_episodes_text
 from ..utils import format_episode
 from .theme import emphasize, placeholder_poster, repolish, rounded_pixmap
 from .widgets import ElidedLabel
@@ -182,6 +183,9 @@ class WatchlistPage(QWidget):
                 self.ctx.notify(f"{total_new} new episode(s) in your watchlist.")
             elif total_new:
                 self.ctx.notify(f"Watchlist: {total_new} new episode(s) available.", 10000)
+                library = self.ctx.library
+                names = [s.title for s in library.shows() if library.new_numbers(s)]
+                self.ctx.notify_new_episodes(*new_episodes_text(total_new, names))
 
         def failed(_exc: Exception) -> None:
             self._finish_check()

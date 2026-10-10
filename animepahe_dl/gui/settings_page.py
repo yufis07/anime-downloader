@@ -145,6 +145,21 @@ class SettingsPage(QWidget):
         form.addRow("Cloudflare", _row(self.cf_status, verify, forget))
         layout.addWidget(box)
 
+        # Tray & notifications
+        box, form = _section("Tray & notifications", "A tray icon next to the clock shows the download "
+                                                     "status and can tell you when things finish.")
+        self.tray_icon = QCheckBox("Show a tray icon")
+        self.notify_finished = QCheckBox("Notify me when the download queue is finished")
+        self.notify_new = QCheckBox("Notify me about new episodes of followed shows (checked at start-up)")
+        self.close_to_tray = QCheckBox("Closing the window keeps downloading in the tray")
+        for box_widget in (self.tray_icon, self.notify_finished, self.notify_new, self.close_to_tray):
+            form.addRow("", box_widget)
+        self.tray_icon.toggled.connect(self._tray_toggled)
+        self.tray_status = QLabel("")
+        self.tray_status.setObjectName("muted")
+        form.addRow("", self.tray_status)
+        layout.addWidget(box)
+
         # Updates
         box, form = _section("Updates", "The app compares itself with the latest build published on GitHub "
                                         "and shows a banner when there is a newer one.")
@@ -189,6 +204,11 @@ class SettingsPage(QWidget):
         self.no_av1.setChecked(s.prefer_non_av1)
         self.rename_jp.setChecked(s.rename_japanese)
         self.check_updates.setChecked(s.check_updates)
+        self.tray_icon.setChecked(s.tray_icon)
+        self.notify_finished.setChecked(s.notify_finished)
+        self.notify_new.setChecked(s.notify_new_episodes)
+        self.close_to_tray.setChecked(s.close_to_tray)
+        self._tray_toggled(s.tray_icon)
         self.update_token.setText(s.update_token)
         self.parallel.setValue(s.max_parallel_episodes)
         self.workers.setValue(s.segment_workers)
@@ -209,6 +229,10 @@ class SettingsPage(QWidget):
         s.prefer_non_av1 = self.no_av1.isChecked()
         s.rename_japanese = self.rename_jp.isChecked()
         s.check_updates = self.check_updates.isChecked()
+        s.tray_icon = self.tray_icon.isChecked()
+        s.notify_finished = self.notify_finished.isChecked()
+        s.notify_new_episodes = self.notify_new.isChecked()
+        s.close_to_tray = self.close_to_tray.isChecked()
         s.update_token = self.update_token.text().strip()
         s.max_parallel_episodes = self.parallel.value()
         s.segment_workers = self.workers.value()
@@ -221,6 +245,12 @@ class SettingsPage(QWidget):
         self.heaven_url.setText(s.animeheaven_url)
         self.saved_label.setText("✔ Settings saved")
         self.saved.emit()
+
+    def _tray_toggled(self, on: bool) -> None:
+        for widget in (self.notify_finished, self.notify_new, self.close_to_tray):
+            widget.setEnabled(on)
+        available = self.ctx.tray.available
+        self.tray_status.setText("" if available else "This desktop has no system tray, so these options do nothing.")
 
     def _check_updates_now(self) -> None:
         if not self.ctx.build:

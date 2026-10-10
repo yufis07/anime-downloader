@@ -10,7 +10,7 @@ from typing import Any, Callable
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QButtonGroup, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton, QStackedWidget,
+    QApplication, QButtonGroup, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton, QStackedWidget,
     QVBoxLayout, QWidget,
 )
 from shiboken6 import isValid
@@ -23,14 +23,16 @@ from ..details import DetailsClient
 from ..discover import DiscoverClient
 from ..downloader import DownloadManager
 from ..library import Library
+from ..notifications import QueueWatcher
 from ..updates import CHECK_INTERVAL, UpdateCheck, check_for_update, current_build
 from ..http import DEFAULT_USER_AGENT, CloudflareChallenge, HttpClient
-from ..utils import find_ffmpeg, open_in_file_manager
+from ..utils import find_ffmpeg, format_speed, open_in_file_manager
 from .queue_page import QueuePage
 from .search_page import SearchPage
 from .settings_page import SettingsPage
 from .theme import app_icon, line_icon
 from .verify_dialog import VerifyDialog
+from .tray import TrayController
 from .update_banner import UpdateBanner
 from .watchlist_page import WatchlistPage
 from .workers import JobRunner
@@ -65,7 +67,16 @@ class MainWindow(QMainWindow):
         self.manager = DownloadManager(self.api, self.settings, on_cloudflare=self._cloudflare_from_thread,
                                     animeheaven=self.heaven, on_episode_done=self._record_download)
 
+        self.tray = TrayController(self)  # before the pages: Settings asks whether a tray exists
         self._build_ui()
+        self.watcher = QueueWatcher()
+        self._quitting = False
+        self._tray_hint_shown = False
+        self.tray.open_requested.connect(self.bring_to_front)
+        self.tray.pause_toggled.connect(self._toggle_pause_from_tray)
+        self.tray.quit_requested.connect(self.quit_app)
+        self.tray.message_clicked.connect(self._tray_message_clicked)
+        self._apply_tray_settings()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
         self.timer.start(500)
@@ -203,6 +214,39 @@ class MainWindow(QMainWindow):
 
         self.jobs.submit(lambda: check_for_update(self.http_updates, self.build, settings.update_token), done, failed)
 
+    # ================================================================== tray
+    def _apply_tray_settings(self) -> None:
+        """Show or hide the tray icon and decide whether closing the window quits the app."""
+        self.tray.set_enabled(self.settings.tray_icon)
+        to_tray = self.settings.close_to_tray and self.tray.visible
+        QApplication.instance().setQuitOnLastWindowClosed(not to_tray)
+
+    def bring_to_front(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def _tray_message_clicked(self, target: str) -> None:
+        self.bring_to_front()
+        self.go_to(self.pages.indexOf(self.watchlist_page if target == "watchlist" else self.queue_page))
+
+    def _toggle_pause_from_tray(self) -> None:
+        if self.manager.paused:
+            self.manager.resume_all()
+        else:
+            self.manager.pause_all()
+        self.queue_page.refresh()
+
+    def quit_app(self) -> None:
+        self._quitting = True
+        self.bring_to_front()
+        self.close()
+        self._quitting = False  # the user declined the "downloads in progress" question
+
+    def notify_new_episodes(self, title: str, message: str) -> None:
+        if self.settings.notify_new_episodes and not self.isActiveWindow():
+            self.tray.notify(title, message, target="watchlist")
+
     def _update_dismissed(self, sha: str) -> None:
         self.settings.dismissed_update = sha
         self.settings.save()
@@ -216,6 +260,12 @@ class MainWindow(QMainWindow):
         active = self.queue_page.refresh()
         index = self.pages.indexOf(self.queue_page)
         self.nav_buttons[index].setText(f"  Download Queue ({active})" if active else "  Download Queue")
+        tasks = self.manager.snapshot()
+        speed = 0.0 if self.manager.paused else sum(t.speed for t in tasks)
+        self.tray.set_status(active, format_speed(speed), self.manager.paused)
+        summary = self.watcher.update(tasks)
+        if summary and self.settings.notify_finished and not self.isActiveWindow():
+            self.tray.notify(*summary.text(), target="queue")
         self._ticks += 1
         if self._ticks % 20 == 0:  # downloads are recorded from other threads, so refresh now and then
             self.update_watchlist_badge()
@@ -335,9 +385,18 @@ class MainWindow(QMainWindow):
         if self.heaven.base_url != self.settings.animeheaven_url:
             self.heaven.set_base_url(self.settings.animeheaven_url)
         self.http.set_identity(self.settings.user_agent or None, self.settings.cookies)
+        self._apply_tray_settings()
         self.notify("Settings saved.")
 
     def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]  # noqa: N802
+        if not self._quitting and self.settings.close_to_tray and self.tray.visible:
+            self.hide()  # keep downloading; "Quit" in the tray menu really exits
+            if not self._tray_hint_shown:
+                self._tray_hint_shown = True
+                self.tray.notify("Still running", "Anime Downloader keeps working in the tray. "
+                                                  "Right-click the icon to quit.")
+            event.ignore()
+            return
         if self.manager.is_busy():
             answer = QMessageBox.question(
                 self, "Downloads in progress",
@@ -348,4 +407,6 @@ class MainWindow(QMainWindow):
                 return
         self.manager.shutdown()
         self.settings.save()
+        self.tray.set_enabled(False)
         event.accept()
+        QApplication.instance().quit()
