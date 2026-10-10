@@ -32,7 +32,9 @@ def main() -> int:
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(__version__)
     apply_theme(app)
-    app.setWindowIcon(app_icon())
+    from ..config import Settings
+
+    app.setWindowIcon(app_icon(Settings.load().icon_style))
     window = MainWindow()
     window.show()
     return app.exec()

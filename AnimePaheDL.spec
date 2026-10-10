@@ -43,6 +43,7 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="AnimePaheDL",
+    icon="assets/AnimePaheDL.ico",  # regenerate with: python tools/make_icon.py
     console=False,
     upx=False,
     version=None,

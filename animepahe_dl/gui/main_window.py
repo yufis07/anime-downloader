@@ -68,7 +68,7 @@ class MainWindow(QMainWindow):
         self.manager = DownloadManager(self.api, self.settings, on_cloudflare=self._cloudflare_from_thread,
                                     animeheaven=self.heaven, on_episode_done=self._record_download)
 
-        self.tray = TrayController(self)  # before the pages: Settings asks whether a tray exists
+        self.tray = TrayController(self, self.settings.icon_style)  # before the pages: Settings asks whether a tray exists
         self._build_ui()
         self.watcher = QueueWatcher()
         self._quitting = False
@@ -105,7 +105,8 @@ class MainWindow(QMainWindow):
         side.setSpacing(4)
         brand = QHBoxLayout()
         logo = QLabel()
-        logo.setPixmap(app_icon().pixmap(30, 30))
+        self.logo = logo
+        logo.setPixmap(app_icon(self.settings.icon_style).pixmap(30, 30))
         name = QLabel("Anime Downloader")
         name.setObjectName("appName")
         brand.addWidget(logo)
@@ -234,6 +235,14 @@ class MainWindow(QMainWindow):
         self.tray.set_enabled(self.settings.tray_icon)
         to_tray = self.settings.close_to_tray and self.tray.visible
         QApplication.instance().setQuitOnLastWindowClosed(not to_tray)
+
+    def _apply_icon(self) -> None:
+        """Window, taskbar, sidebar logo and tray follow the chosen icon style."""
+        icon = app_icon(self.settings.icon_style)
+        QApplication.instance().setWindowIcon(icon)
+        self.setWindowIcon(icon)
+        self.logo.setPixmap(icon.pixmap(30, 30))
+        self.tray.set_icon(icon)
 
     def bring_to_front(self) -> None:
         self.showNormal()
@@ -400,6 +409,7 @@ class MainWindow(QMainWindow):
             self.heaven.set_base_url(self.settings.animeheaven_url)
         self.http.set_identity(self.settings.user_agent or None, self.settings.cookies)
         self._apply_tray_settings()
+        self._apply_icon()
         self.notify("Settings saved.")
 
     def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]  # noqa: N802
