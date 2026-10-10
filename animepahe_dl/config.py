@@ -10,6 +10,9 @@ from pathlib import Path
 
 APP_NAME = "AnimePaheDL"
 DEFAULT_BASE_URL = "https://animepahe.pw"
+SITES = ("animepahe", "animeheaven")
+SITE_LABELS = {"animepahe": "AnimePahe", "animeheaven": "AnimeHeaven"}
+DEFAULT_ANIMEHEAVEN_URL = "https://animeheaven.me"
 QUALITIES = (1080, 720, 480, 360)
 AUDIO_CHOICES = ("jpn", "eng", "any")
 
@@ -34,6 +37,8 @@ def default_download_dir() -> Path:
 @dataclass
 class Settings:
     base_url: str = DEFAULT_BASE_URL
+    animeheaven_url: str = DEFAULT_ANIMEHEAVEN_URL
+    site: str = "animepahe"  # last used download site
     download_dir: str = field(default_factory=lambda: str(default_download_dir()))
     quality: int = 1080
     audio: str = "jpn"
@@ -79,6 +84,11 @@ class Settings:
         self.base_url = (self.base_url or DEFAULT_BASE_URL).strip().rstrip("/")
         if not self.base_url.startswith(("http://", "https://")):
             self.base_url = "https://" + self.base_url
+        self.animeheaven_url = (self.animeheaven_url or DEFAULT_ANIMEHEAVEN_URL).strip().rstrip("/")
+        if not self.animeheaven_url.startswith(("http://", "https://")):
+            self.animeheaven_url = "https://" + self.animeheaven_url
+        if self.site not in SITES:
+            self.site = "animepahe"
         try:
             self.quality = int(self.quality)
         except (TypeError, ValueError):

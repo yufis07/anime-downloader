@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from .. import __version__
+from ..animeheaven import AnimeHeaven
 from ..animepahe import AnimePahe
 from ..config import Settings
 from ..downloader import DownloadManager
@@ -40,13 +41,17 @@ class MainWindow(QMainWindow):
         self.settings = Settings.load()
         self.http = HttpClient(self.settings.user_agent, self.settings.cookies)
         self.api = AnimePahe(self.http, self.settings.base_url)
+        # AnimeHeaven gets its own client so it never carries AnimePahe's Cloudflare cookies.
+        self.http_heaven = HttpClient()
+        self.heaven = AnimeHeaven(self.http_heaven, self.settings.animeheaven_url)
         self.jobs = JobRunner(self)
         self._images: dict[str, QPixmap] = {}
         self._cf_prompt_pending = False
         self._verifying = False
         self._last_verified = 0.0  # monotonic time of the last successful browser check
         self.cloudflare_needed.connect(self._cloudflare_prompt, Qt.ConnectionType.QueuedConnection)
-        self.manager = DownloadManager(self.api, self.settings, on_cloudflare=self._cloudflare_from_thread)
+        self.manager = DownloadManager(self.api, self.settings, on_cloudflare=self._cloudflare_from_thread,
+                                    animeheaven=self.heaven)
 
         self._build_ui()
         self.timer = QTimer(self)
@@ -169,8 +174,14 @@ class MainWindow(QMainWindow):
                 if isValid(owner):
                     callback(pixmap)
 
-        self.jobs.submit(lambda: self.http.get_bytes(url, referer=self.api.referer, retries=1), done,
+        client, referer = ((self.http_heaven, self.heaven.referer) if url.startswith(self.heaven.base_url)
+                           else (self.http, self.api.referer))
+        self.jobs.submit(lambda: client.get_bytes(url, referer=referer, retries=1), done,
                          lambda _exc: None)
+
+    def provider(self, site: str):  # type: ignore[no-untyped-def]
+        """The site client (AnimePahe or AnimeHeaven) for an ``Anime.site`` value."""
+        return self.heaven if site == "animeheaven" else self.api
 
     def open_download_folder(self) -> None:
         path = Path(self.settings.download_dir)
@@ -243,6 +254,8 @@ class MainWindow(QMainWindow):
     def _settings_saved(self) -> None:
         if self.api.base_url != self.settings.base_url:
             self.api.set_base_url(self.settings.base_url)
+        if self.heaven.base_url != self.settings.animeheaven_url:
+            self.heaven.set_base_url(self.settings.animeheaven_url)
         self.http.set_identity(self.settings.user_agent or None, self.settings.cookies)
         self.notify("Settings saved.")
 

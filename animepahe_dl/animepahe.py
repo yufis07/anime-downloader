@@ -25,6 +25,7 @@ class Anime:
     year: int | None = None
     score: float | None = None
     poster: str = ""
+    site: str = "animepahe"
 
     @property
     def subtitle(self) -> str:

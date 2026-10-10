@@ -7,7 +7,10 @@ downloads the episodes you pick, several at a time, as `.mp4` files.
 
 ## Features
 
-- **Search** by title, or paste an anime link (`https://animepahe.pw/anime/<id>`).
+- **Two sites.** Pick **AnimePahe** or **AnimeHeaven** next to the search box. AnimeHeaven serves plain `.mp4`
+  files (one quality per episode, no Cloudflare check window needed), downloads resume, and its own romaji
+  title is used for the *Rename to Japanese* option.
+- **Search** by title, or paste an anime link (`https://animepahe.pw/anime/<id>` or `https://animeheaven.me/anime.php?<id>`).
 - **Episode list** with checkboxes, *Select all*, and range selection such as `1-12, 15, 20-`.
 - **Quality and audio** preferences: 1080p / 720p / 480p / 360p, Japanese (sub) or English (dub).
   The best source at or below your quality is picked, and the app falls back to sub when no dub exists.
@@ -102,6 +105,8 @@ The same `.exe` has a command-line mode:
 ```bat
 AnimePaheDL.exe cli search "frieren"
 AnimePaheDL.exe cli download "https://animepahe.pw/anime/<id>" -e 1-12 -q 1080 -a jpn -o D:\Anime
+AnimePaheDL.exe cli search "frieren" --site animeheaven
+AnimePaheDL.exe cli download "https://animeheaven.me/anime.php?ak2gr" -e 1-3
 AnimePaheDL.exe cli download "frieren" -e 5- -q 720 --cookie cf_clearance=... --user-agent "Mozilla/5.0 ..."
 ```
 
@@ -125,6 +130,7 @@ Settings and the browser profile live in `%APPDATA%\AnimePaheDL`.
 | --- | --- |
 | `animepahe_dl/animepahe.py` | Site API client: search, episodes, source scraping and selection |
 | `animepahe_dl/mal.py` | English title → Japanese (romaji) title lookup on MyAnimeList (Jikan API) |
+| `animepahe_dl/animeheaven.py` | AnimeHeaven client: search, episode list, direct video link |
 | `animepahe_dl/kwik.py` | JavaScript unpacker and playlist extraction |
 | `animepahe_dl/hls.py` | HLS parser and parallel AES-128 segment downloader with resume |
 | `animepahe_dl/downloader.py` | Download queue, parallel episodes, ffmpeg remux |
