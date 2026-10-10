@@ -125,6 +125,8 @@ def _stylesheet(t: dict[str, str]) -> str:
     QFrame#panel {{ background: {t['surface']}; border: 1px solid {t['border']}; border-radius: 14px; }}
     QFrame#queueRow {{ background: {t['surface']}; border: 1px solid {t['border']}; border-radius: 12px; }}
 
+    QFrame#updateBanner {{ background: {t['surface2']}; border-bottom: 1px solid {ACCENT}; }}
+    QLabel#updateText {{ font-weight: 600; }}
     QLabel#chip {{ background: {t['surface2']}; border: 1px solid {t['border']}; border-radius: 10px;
         padding: 2px 10px; color: {t['muted']}; font-size: 12px; }}
     QLabel#factChip {{ background: {t['surface2']}; border-radius: 10px; padding: 3px 11px; font-size: 12px;

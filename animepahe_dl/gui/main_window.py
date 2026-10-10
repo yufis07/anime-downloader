@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import webbrowser
 from pathlib import Path
 from typing import Any, Callable
 
@@ -22,6 +23,7 @@ from ..details import DetailsClient
 from ..discover import DiscoverClient
 from ..downloader import DownloadManager
 from ..library import Library
+from ..updates import CHECK_INTERVAL, UpdateCheck, check_for_update, current_build
 from ..http import DEFAULT_USER_AGENT, CloudflareChallenge, HttpClient
 from ..utils import find_ffmpeg, open_in_file_manager
 from .queue_page import QueuePage
@@ -29,6 +31,7 @@ from .search_page import SearchPage
 from .settings_page import SettingsPage
 from .theme import app_icon, line_icon
 from .verify_dialog import VerifyDialog
+from .update_banner import UpdateBanner
 from .watchlist_page import WatchlistPage
 from .workers import JobRunner
 
@@ -50,6 +53,8 @@ class MainWindow(QMainWindow):
         self.heaven = AnimeHeaven(self.http_heaven, self.settings.animeheaven_url)
         self.jobs = JobRunner(self)
         self.library = Library()
+        self.http_updates = HttpClient(retries=1, timeout=15.0)
+        self.build = current_build()
         self.details = DetailsClient()
         self.discover = DiscoverClient()
         self._images: dict[str, QPixmap] = {}
@@ -65,6 +70,7 @@ class MainWindow(QMainWindow):
         self.timer.timeout.connect(self._tick)
         self.timer.start(500)
         self._ticks = 0
+        QTimer.singleShot(6000, lambda: self.check_for_updates(automatic=True))
         if self.library.shows():  # look for new episodes shortly after start-up
             QTimer.singleShot(4000, lambda: self.watchlist_page.check(quiet=True))
         if not find_ffmpeg(self.settings.ffmpeg_path):
@@ -130,12 +136,20 @@ class MainWindow(QMainWindow):
         verify.setToolTip("Open the site in a browser window to pass the 'verify you are human' check")
         verify.clicked.connect(lambda: self.verify())
         side.addWidget(verify)
-        version = QLabel(f"Version {__version__}")
+        version = QLabel(f"Version {__version__}" + (f" (build {self.build[:7]})" if self.build else " (source)"))
         version.setObjectName("appVersion")
         side.addWidget(version)
 
         layout.addWidget(sidebar)
-        layout.addWidget(self.pages, 1)
+        self.update_banner = UpdateBanner()
+        self.update_banner.download_requested.connect(webbrowser.open)
+        self.update_banner.dismissed.connect(self._update_dismissed)
+        content = QVBoxLayout()
+        content.setContentsMargins(0, 0, 0, 0)
+        content.setSpacing(0)
+        content.addWidget(self.update_banner)
+        content.addWidget(self.pages, 1)
+        layout.addLayout(content, 1)
         self.setCentralWidget(root)
         self.go_to(0)
 
@@ -160,6 +174,38 @@ class MainWindow(QMainWindow):
     def _record_download(self, task) -> None:  # type: ignore[no-untyped-def]
         """Called from a download thread when an episode is on disk."""
         self.library.record_download(task.site, task.anime_session, task.episode.number, task.output_path)
+
+    def check_for_updates(self, automatic: bool = False, on_result: Callable[[UpdateCheck], None] | None = None,
+                          on_error: Callable[[Exception], None] | None = None) -> None:
+        """Compare this build with the latest release in the background.
+
+        ``automatic`` checks respect the setting and run at most every few hours; an update the user
+        already dismissed does not show the banner again."""
+        settings = self.settings
+        if automatic and (not settings.check_updates or not self.build
+                          or time.time() - settings.last_update_check < CHECK_INTERVAL):
+            return
+
+        def done(result: UpdateCheck) -> None:
+            settings.last_update_check = time.time()
+            settings.save()
+            if result.status == "available" and result.info:
+                if not (automatic and result.info.sha == settings.dismissed_update):
+                    self.update_banner.show_update(result.info)
+            else:
+                self.update_banner.hide()
+            if on_result:
+                on_result(result)
+
+        def failed(exc: Exception) -> None:
+            if on_error:
+                on_error(exc)
+
+        self.jobs.submit(lambda: check_for_update(self.http_updates, self.build, settings.update_token), done, failed)
+
+    def _update_dismissed(self, sha: str) -> None:
+        self.settings.dismissed_update = sha
+        self.settings.save()
 
     def update_watchlist_badge(self) -> None:
         new = self.library.total_new()

@@ -7,6 +7,10 @@ downloads the episodes you pick, several at a time, as `.mp4` files.
 
 ## Features
 
+- **Update banner.** The exe knows which commit it was built from and, a few seconds after start (at most every
+  six hours), compares it with the latest GitHub release. A banner offers **Download** (opens the release page) or
+  **Not now**; **Settings → Updates** has a switch and a *Check now* button. While the repository is private GitHub
+  hides the release from anonymous requests, so paste a read-only token (fine-grained, *Contents: read*) there.
 - **Discover home.** Before you search, Search & Discover shows *Trending now*, *This season* and *Top rated*
   rows with cover art (from AniList, cached for six hours, works offline from the cache). Click a title and the
   app finds it on the selected site, trying the English name first and the romaji name second.
@@ -141,6 +145,7 @@ Settings and the browser profile live in `%APPDATA%\AnimePaheDL`.
 | `animepahe_dl/animepahe.py` | Site API client: search, episodes, source scraping and selection |
 | `animepahe_dl/mal.py` | English title → Japanese (romaji) title lookup on MyAnimeList (Jikan API) |
 | `animepahe_dl/animeheaven.py` | AnimeHeaven client: search, episode list, direct video link |
+| `animepahe_dl/updates.py` | Update check against the rolling `latest` release (compares build commits) |
 | `animepahe_dl/discover.py` | Trending / this season / top rated lists for the Discover home (AniList, cached) |
 | `animepahe_dl/details.py` | Synopsis, genres, score and banner for the show page (AniList) |
 | `animepahe_dl/library.py` | Watchlist and download history (`library.json`) |

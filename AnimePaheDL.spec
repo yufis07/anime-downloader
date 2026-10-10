@@ -14,7 +14,7 @@ a = Analysis(
     pathex=["."],
     binaries=binaries,
     datas=datas,
-    hiddenimports=hiddenimports + ["PySide6.QtWebEngineWidgets", "PySide6.QtWebEngineCore"],
+    hiddenimports=hiddenimports + ["animepahe_dl._build", "PySide6.QtWebEngineWidgets", "PySide6.QtWebEngineCore"],
     excludes=[
         "tkinter", "PySide6.Qt3DCore", "PySide6.QtCharts", "PySide6.QtDataVisualization",
         "PySide6.QtMultimedia", "PySide6.QtQuick3D", "PySide6.QtBluetooth", "PySide6.QtSql",

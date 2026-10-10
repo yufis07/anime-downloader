@@ -48,6 +48,10 @@ class Settings:
     ffmpeg_path: str = ""
     # After a download finishes, rename the file and folder to the anime's Japanese title (MyAnimeList).
     rename_japanese: bool = False
+    check_updates: bool = True
+    update_token: str = ""  # optional read-only GitHub token, needed while the repository is private
+    dismissed_update: str = ""  # commit of the update banner the user closed
+    last_update_check: float = 0.0
     filename_template: str = "{anime} - Episode {episode}"
     # Identity captured from the Cloudflare verification browser. Cloudflare binds
     # the cf_clearance cookie to the browser's User-Agent, so both must be reused.
