@@ -7,6 +7,9 @@ downloads the episodes you pick, several at a time, as `.mp4` files.
 
 ## Features
 
+- **Show page.** Opening a show gives a banner header with the cover, romaji and English title, score, year,
+  studio, genres and a collapsible synopsis (from AniList, works for both sites). The search bar steps aside so the
+  episode list has the whole window.
 - **Watchlist.** Click **☆ Follow** on a show. The **Watchlist** page checks all followed shows when the app
   starts (and on demand), shows a **N new** badge, and downloads the new episodes in one click. Episode lists mark
   what you already have with ✓, and **Select missing** picks the rest.
@@ -134,6 +137,7 @@ Settings and the browser profile live in `%APPDATA%\AnimePaheDL`.
 | `animepahe_dl/animepahe.py` | Site API client: search, episodes, source scraping and selection |
 | `animepahe_dl/mal.py` | English title → Japanese (romaji) title lookup on MyAnimeList (Jikan API) |
 | `animepahe_dl/animeheaven.py` | AnimeHeaven client: search, episode list, direct video link |
+| `animepahe_dl/details.py` | Synopsis, genres, score and banner for the show page (AniList) |
 | `animepahe_dl/library.py` | Watchlist and download history (`library.json`) |
 | `animepahe_dl/kwik.py` | JavaScript unpacker and playlist extraction |
 | `animepahe_dl/hls.py` | HLS parser and parallel AES-128 segment downloader with resume |

@@ -18,6 +18,7 @@ from .. import __version__
 from ..animeheaven import AnimeHeaven
 from ..animepahe import AnimePahe
 from ..config import Settings
+from ..details import DetailsClient
 from ..downloader import DownloadManager
 from ..library import Library
 from ..http import DEFAULT_USER_AGENT, CloudflareChallenge, HttpClient
@@ -48,6 +49,7 @@ class MainWindow(QMainWindow):
         self.heaven = AnimeHeaven(self.http_heaven, self.settings.animeheaven_url)
         self.jobs = JobRunner(self)
         self.library = Library()
+        self.details = DetailsClient()
         self._images: dict[str, QPixmap] = {}
         self._cf_prompt_pending = False
         self._verifying = False
