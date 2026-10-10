@@ -30,6 +30,7 @@ from ..utils import find_ffmpeg, format_speed, open_in_file_manager
 from .queue_page import QueuePage
 from .search_page import SearchPage
 from .settings_page import SettingsPage
+from .setup_wizard import SetupWizard
 from .theme import app_icon, line_icon
 from .verify_dialog import VerifyDialog
 from .tray import TrayController
@@ -84,7 +85,9 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(6000, lambda: self.check_for_updates(automatic=True))
         if self.library.shows():  # look for new episodes shortly after start-up
             QTimer.singleShot(4000, lambda: self.watchlist_page.check(quiet=True))
-        if not find_ffmpeg(self.settings.ffmpeg_path):
+        if not self.settings.setup_done:
+            QTimer.singleShot(300, self.run_setup)
+        elif not find_ffmpeg(self.settings.ffmpeg_path):
             self.notify("Tip: install ffmpeg (winget install Gyan.FFmpeg) to get .mp4 files instead of .ts.", 0)
 
     # ================================================================== layout
@@ -213,6 +216,17 @@ class MainWindow(QMainWindow):
                 on_error(exc)
 
         self.jobs.submit(lambda: check_for_update(self.http_updates, self.build, settings.update_token), done, failed)
+
+    # ================================================================== first-run setup
+    def run_setup(self) -> None:
+        """The welcome wizard (also available from Settings)."""
+        SetupWizard(self).exec()
+        self.settings_page.load()
+
+    def settings_applied(self) -> None:
+        """Settings changed from outside the Settings page (the wizard): refresh everything that caches them."""
+        self._settings_saved()
+        self.search_page.site.setCurrentIndex(max(0, self.search_page.site.findData(self.settings.site)))
 
     # ================================================================== tray
     def _apply_tray_settings(self) -> None:

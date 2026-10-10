@@ -103,6 +103,9 @@ def find_ffmpeg(configured: str = "") -> str | None:
     # Next to the frozen executable / project root (lets users drop ffmpeg.exe beside the app).
     base = Path(getattr(sys, "_MEIPASS", Path(sys.argv[0]).resolve().parent))
     candidates += [str(base / exe), str(Path(sys.executable).parent / exe)]
+    from .config import app_data_dir  # downloaded by the setup wizard / Settings
+
+    candidates.append(str(app_data_dir() / "tools" / exe))
     for candidate in candidates:
         if candidate and Path(candidate).is_file() and os.access(candidate, os.X_OK):
             return candidate
