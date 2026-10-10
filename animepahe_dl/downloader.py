@@ -48,6 +48,7 @@ class DownloadTask:
     anime_session: str
     episode: Episode
     site: str = "animepahe"
+    poster: str = ""
     id: int = field(default_factory=lambda: next(_ids))
     status: Status = Status.QUEUED
     source_label: str = ""
@@ -86,6 +87,21 @@ class DownloadTask:
                 return 0.0
             span = max(now - self._speed_window[0][0], 1.0)
             return sum(b for _, b in self._speed_window) / span
+
+    @property
+    def remaining_bytes(self) -> float | None:
+        """Bytes still to download, estimated from the share already done (None until a few % are in)."""
+        if self.status != Status.DOWNLOADING or self.progress < 0.02 or not self.bytes_done:
+            return None
+        return self.bytes_done / self.progress - self.bytes_done
+
+    @property
+    def eta(self) -> float | None:
+        """Seconds left at the current speed (None when it cannot be estimated)."""
+        remaining, speed = self.remaining_bytes, self.speed
+        if remaining is None or speed <= 0:
+            return None
+        return remaining / speed
 
     def reset_progress(self) -> None:
         with self._lock:
@@ -190,8 +206,8 @@ class DownloadManager:
 
     # ---------------------------------------------------------------- public API
     def add(self, anime_title: str, anime_session: str, episodes: list[Episode],
-            site: str = "animepahe") -> list[DownloadTask]:
-        new = [DownloadTask(anime_title, anime_session, ep, site=site) for ep in episodes]
+            site: str = "animepahe", poster: str = "") -> list[DownloadTask]:
+        new = [DownloadTask(anime_title, anime_session, ep, site=site, poster=poster) for ep in episodes]
         with self._cond:
             existing = {(t.site, t.anime_session, t.episode.session) for t in self._tasks if not t.status.finished}
             new = [t for t in new if (t.site, t.anime_session, t.episode.session) not in existing]
@@ -202,6 +218,25 @@ class DownloadManager:
     def snapshot(self) -> list[DownloadTask]:
         with self._cond:
             return list(self._tasks)
+
+    def move_task(self, task_id: int, where: str) -> bool:
+        """Change the start order of a waiting download: ``where`` is 'top', 'up' or 'down' (relative to
+        the other waiting downloads). Returns False when nothing moved."""
+        with self._cond:
+            waiting = [i for i, t in enumerate(self._tasks) if t.status == Status.QUEUED]
+            positions = {self._tasks[i].id: n for n, i in enumerate(waiting)}
+            if task_id not in positions:
+                return False
+            n = positions[task_id]
+            target = {"top": 0, "up": n - 1, "down": n + 1}.get(where, n)
+            if target == n or not 0 <= target < len(waiting):
+                return False
+            task = self._tasks.pop(waiting[n])
+            waiting_after = [i for i, t in enumerate(self._tasks) if t.status == Status.QUEUED]
+            index = waiting_after[target] if target < len(waiting_after) else len(self._tasks)
+            self._tasks.insert(index, task)
+            self._cond.notify_all()
+            return True
 
     def cancel(self, task_id: int) -> None:
         with self._cond:

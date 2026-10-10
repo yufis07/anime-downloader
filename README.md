@@ -76,10 +76,11 @@ The sidebar on the left has four sections: **Search & Discover**, **Watchlist**,
 2. Click **View Episodes** on a card. The episode panel lists every episode with a checkbox.
    Use **Select All**, click individual rows, or type a range and press **Select range**.
 3. Pick quality and audio, then click **Add N to Queue**. The app switches to the queue.
-4. **Download Queue.** Each episode has its own progress bar, live speed in MB/s and a status:
+4. **Download Queue.** Each episode has a cover thumbnail, a smoothly moving progress bar, live speed in MB/s,
+   the time left and a status:
    Queued, Resolving, Downloading, Stitching via FFmpeg, Completed or Failed.
-   **Pause All** holds every download and turns into **Resume All**. Rows also offer
-   Cancel, Retry and Show in folder.
+   **Pause All** holds every download and turns into **Resume All**. Waiting episodes have **Top**, **▲** and **▼**
+   buttons to change the order they start in. Rows also offer Cancel, Retry and Show in folder.
 5. **Settings.** Set the download folder, file-name pattern, default quality and audio, how many
    episodes run at once, the ffmpeg location, and the site address.
 

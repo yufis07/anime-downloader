@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
+from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QRect, QSize, Qt, Signal
 from PySide6.QtGui import QFontMetrics, QPixmap
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QLayout, QLayoutItem, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout,
@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 
 from ..animepahe import Anime
 from ..downloader import DownloadTask, Status
-from ..utils import format_bytes, format_speed
+from ..utils import format_bytes, format_eta, format_speed
 from .theme import emphasize, placeholder_poster, repolish, rounded_pixmap
 
 
@@ -181,15 +181,24 @@ class DownloadRow(QFrame):
     cancel_requested = Signal(int)
     retry_requested = Signal(int)
     open_requested = Signal(int)
+    move_requested = Signal(int, str)
+    THUMB_W, THUMB_H = 46, 66
 
     def __init__(self, task: DownloadTask, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.task_id = task.id
         self.setObjectName("queueRow")
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(16, 12, 16, 12)
+        root = QHBoxLayout(self)
+        root.setContentsMargins(14, 12, 16, 12)
+        root.setSpacing(14)
+        self.thumb = QLabel()
+        self.thumb.setFixedSize(self.THUMB_W, self.THUMB_H)
+        self.thumb.setPixmap(placeholder_poster(task.anime_title, self.THUMB_W, self.THUMB_H))
+        root.addWidget(self.thumb, 0, Qt.AlignmentFlag.AlignVCenter)
+        outer = QVBoxLayout()
         outer.setSpacing(6)
+        root.addLayout(outer, 1)
 
         top = QHBoxLayout()
         self.title = ElidedLabel(f"{task.anime_title} — Episode {task.episode_label}")
@@ -207,6 +216,8 @@ class DownloadRow(QFrame):
         self.bar = QProgressBar()
         self.bar.setRange(0, 1000)
         self.bar.setTextVisible(False)
+        self._anim = QPropertyAnimation(self.bar, b"value", self)  # glide between the 0.5 s updates
+        self._anim.setEasingCurve(QEasingCurve.Type.Linear)
         outer.addWidget(self.bar)
 
         bottom = QHBoxLayout()
@@ -218,14 +229,23 @@ class DownloadRow(QFrame):
         self.cancel_btn = QPushButton("Cancel")
         self.retry_btn = QPushButton("Retry")
         self.open_btn = QPushButton("Show in folder")
-        for btn in (self.cancel_btn, self.retry_btn, self.open_btn):
+        self.up_btn = QPushButton("▲")
+        self.down_btn = QPushButton("▼")
+        self.top_btn = QPushButton("Top")
+        self.up_btn.setToolTip("Start earlier")
+        self.down_btn.setToolTip("Start later")
+        self.top_btn.setToolTip("Start next")
+        for btn in (self.top_btn, self.up_btn, self.down_btn, self.cancel_btn, self.retry_btn, self.open_btn):
             btn.setObjectName("ghost")
         self.cancel_btn.clicked.connect(lambda: self.cancel_requested.emit(self.task_id))
         self.retry_btn.clicked.connect(lambda: self.retry_requested.emit(self.task_id))
         self.open_btn.clicked.connect(lambda: self.open_requested.emit(self.task_id))
+        self.top_btn.clicked.connect(lambda: self.move_requested.emit(self.task_id, "top"))
+        self.up_btn.clicked.connect(lambda: self.move_requested.emit(self.task_id, "up"))
+        self.down_btn.clicked.connect(lambda: self.move_requested.emit(self.task_id, "down"))
         bottom.addWidget(self.speed)
         bottom.addWidget(self.details, 1)
-        for btn in (self.cancel_btn, self.retry_btn, self.open_btn):
+        for btn in (self.top_btn, self.up_btn, self.down_btn, self.cancel_btn, self.retry_btn, self.open_btn):
             bottom.addWidget(btn)
         outer.addLayout(bottom)
         self._state = ""
@@ -243,11 +263,14 @@ class DownloadRow(QFrame):
                 widget.setProperty("state", state)
                 repolish(widget)
         self.source.setText(task.source_label)
-        self.bar.setValue(int(task.progress * 1000))
+        self._set_progress(int(task.progress * 1000), animate=task.status == Status.DOWNLOADING and not paused)
 
         speed = 0.0 if paused else task.speed
         self.speed.setText(format_speed(speed) if speed else ("—" if active else ""))
         bits = [f"{task.progress:.0%}"]
+        eta = "" if paused else format_eta(task.eta)
+        if eta:
+            bits.append(f"{eta} left")
         if task.bytes_done:
             bits.append(format_bytes(task.bytes_done))
         if task.segments_total and task.status == Status.DOWNLOADING:
@@ -258,6 +281,24 @@ class DownloadRow(QFrame):
             bits.append(task.output_path)
         self.details.set_full_text("  ·  ".join(bits))
 
+        waiting = task.status == Status.QUEUED
+        for btn in (self.top_btn, self.up_btn, self.down_btn):
+            btn.setVisible(waiting)
         self.cancel_btn.setVisible(active)
         self.retry_btn.setVisible(task.status in {Status.FAILED, Status.CANCELLED})
         self.open_btn.setVisible(bool(task.output_path))
+
+    def set_cover(self, pixmap: QPixmap) -> None:
+        self.thumb.setPixmap(rounded_pixmap(pixmap, self.THUMB_W, self.THUMB_H, 6))
+
+    def _set_progress(self, value: int, animate: bool) -> None:
+        current = self.bar.value()
+        if not animate or value <= current or self.bar.window().isHidden():
+            self._anim.stop()
+            self.bar.setValue(value)
+            return
+        self._anim.stop()
+        self._anim.setDuration(500)  # the queue refreshes every 500 ms
+        self._anim.setStartValue(current)
+        self._anim.setEndValue(value)
+        self._anim.start()

@@ -81,6 +81,19 @@ def format_speed(bytes_per_second: float) -> str:
     return f"{bytes_per_second / (1024 * 1024):.2f} MB/s"
 
 
+def format_eta(seconds: float | None) -> str:
+    """Time left as '45 s', '12 min' or '1 h 05 min' ('' when unknown)."""
+    if seconds is None or seconds < 0 or seconds != seconds or seconds == float("inf"):
+        return ""
+    seconds = int(round(seconds))
+    if seconds < 60:
+        return f"{max(seconds, 1)} s"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes} min"
+    return f"{minutes // 60} h {minutes % 60:02d} min"
+
+
 def find_ffmpeg(configured: str = "") -> str | None:
     """Return a usable ffmpeg executable path, or None."""
     candidates: list[str] = []

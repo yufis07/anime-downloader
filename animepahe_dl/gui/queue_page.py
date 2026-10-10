@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from ..downloader import Status
-from ..utils import format_speed, open_in_file_manager
+from ..utils import format_eta, format_speed, open_in_file_manager
 from .theme import emphasize
 from .widgets import DownloadRow
 
@@ -78,6 +78,10 @@ class QueuePage(QWidget):
         self.pause_btn.setText("Resume All" if paused else "Pause All")
         self.refresh()
 
+    def _move(self, task_id: int, where: str) -> None:
+        if self.ctx.manager.move_task(task_id, where):
+            self.refresh()
+
     def _clear_finished(self) -> None:
         self.ctx.manager.clear_finished()
         self.refresh()
@@ -107,9 +111,16 @@ class QueuePage(QWidget):
                 row.cancel_requested.connect(manager.cancel)
                 row.retry_requested.connect(manager.retry)
                 row.open_requested.connect(self._open)
+                row.move_requested.connect(self._move)
                 self.rows[task.id] = row
                 self.list_layout.insertWidget(self.list_layout.count() - 1, row)
+                if task.poster:
+                    self.ctx.load_image(task.poster, row, row.set_cover)
             row.update_from(task, paused)
+        for index, task in enumerate(tasks):  # keep the rows in the manager's start order
+            row = self.rows[task.id]
+            if self.list_layout.indexOf(row) != index:
+                self.list_layout.insertWidget(index, row)
         self.empty.setVisible(not tasks)
 
         active = sum(1 for t in tasks if not t.status.finished)
@@ -123,6 +134,11 @@ class QueuePage(QWidget):
             parts.append("paused")
         elif speed:
             parts.append(f"total {format_speed(speed)}")
+            remaining = [t.remaining_bytes for t in tasks if t.status == Status.DOWNLOADING]
+            if remaining and all(r is not None for r in remaining):
+                left = format_eta(sum(remaining) / speed)  # type: ignore[arg-type]
+                if left:
+                    parts.append(f"{left} left")
         self.summary.setText("  ·  ".join(parts) if tasks else "Nothing queued yet")
         if self.pause_btn.isChecked() != paused:
             self.pause_btn.blockSignals(True)
