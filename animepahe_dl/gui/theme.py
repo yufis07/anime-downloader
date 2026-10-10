@@ -242,6 +242,10 @@ def _draw(kind: str, painter: QPainter, s: float, color: QColor) -> None:
         painter.drawPath(path)
         painter.drawPolyline(QPolygonF([QPointF(s * 0.36, s * 0.5), QPointF(s * 0.47, s * 0.61),
                                         QPointF(s * 0.66, s * 0.4)]))
+    elif kind == "bookmark":
+        painter.drawPolyline(QPolygonF([QPointF(s * 0.27, s * 0.14), QPointF(s * 0.27, s * 0.88),
+                                        QPointF(s * 0.5, s * 0.68), QPointF(s * 0.73, s * 0.88),
+                                        QPointF(s * 0.73, s * 0.14), QPointF(s * 0.27, s * 0.14)]))
     elif kind == "back":
         painter.drawPolyline(QPolygonF([QPointF(s * 0.6, s * 0.2), QPointF(s * 0.3, s * 0.5),
                                         QPointF(s * 0.6, s * 0.8)]))

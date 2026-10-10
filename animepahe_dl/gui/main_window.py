@@ -19,6 +19,7 @@ from ..animeheaven import AnimeHeaven
 from ..animepahe import AnimePahe
 from ..config import Settings
 from ..downloader import DownloadManager
+from ..library import Library
 from ..http import DEFAULT_USER_AGENT, CloudflareChallenge, HttpClient
 from ..utils import find_ffmpeg, open_in_file_manager
 from .queue_page import QueuePage
@@ -26,6 +27,7 @@ from .search_page import SearchPage
 from .settings_page import SettingsPage
 from .theme import app_icon, line_icon
 from .verify_dialog import VerifyDialog
+from .watchlist_page import WatchlistPage
 from .workers import JobRunner
 
 
@@ -45,18 +47,22 @@ class MainWindow(QMainWindow):
         self.http_heaven = HttpClient()
         self.heaven = AnimeHeaven(self.http_heaven, self.settings.animeheaven_url)
         self.jobs = JobRunner(self)
+        self.library = Library()
         self._images: dict[str, QPixmap] = {}
         self._cf_prompt_pending = False
         self._verifying = False
         self._last_verified = 0.0  # monotonic time of the last successful browser check
         self.cloudflare_needed.connect(self._cloudflare_prompt, Qt.ConnectionType.QueuedConnection)
         self.manager = DownloadManager(self.api, self.settings, on_cloudflare=self._cloudflare_from_thread,
-                                    animeheaven=self.heaven)
+                                    animeheaven=self.heaven, on_episode_done=self._record_download)
 
         self._build_ui()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
         self.timer.start(500)
+        self._ticks = 0
+        if self.library.shows():  # look for new episodes shortly after start-up
+            QTimer.singleShot(4000, lambda: self.watchlist_page.check(quiet=True))
         if not find_ffmpeg(self.settings.ffmpeg_path):
             self.notify("Tip: install ffmpeg (winget install Gyan.FFmpeg) to get .mp4 files instead of .ts.", 0)
 
@@ -86,6 +92,7 @@ class MainWindow(QMainWindow):
         self.pages = QStackedWidget()
         self.pages.setObjectName("pages")
         self.search_page = SearchPage(self)
+        self.watchlist_page = WatchlistPage(self)
         self.queue_page = QueuePage(self)
         self.settings_page = SettingsPage(self)
         self.settings_page.saved.connect(self._settings_saved)
@@ -95,6 +102,7 @@ class MainWindow(QMainWindow):
         self.nav_buttons: list[QPushButton] = []
         for index, (label, icon, page) in enumerate((
             ("Search && Discover", "search", self.search_page),  # '&&' = literal '&' in Qt buttons
+            ("Watchlist", "bookmark", self.watchlist_page),
             ("Download Queue", "download", self.queue_page),
             ("Settings", "settings", self.settings_page),
         )):
@@ -132,15 +140,35 @@ class MainWindow(QMainWindow):
         self.nav_buttons[index].setChecked(True)
         if self.pages.currentWidget() is self.settings_page:
             self.settings_page.load()
+        elif self.pages.currentWidget() is self.watchlist_page:
+            self.watchlist_page.refresh()
         elif self.pages.currentWidget() is self.search_page:
             self.search_page.input.setFocus()
 
     def show_queue(self) -> None:
-        self.go_to(1)
+        self.go_to(self.pages.indexOf(self.queue_page))
+
+    def open_anime(self, anime) -> None:  # type: ignore[no-untyped-def]
+        """Show the episode list of ``anime`` in Search & Discover."""
+        self.go_to(self.pages.indexOf(self.search_page))
+        self.search_page.open_anime(anime)
+
+    def _record_download(self, task) -> None:  # type: ignore[no-untyped-def]
+        """Called from a download thread when an episode is on disk."""
+        self.library.record_download(task.site, task.anime_session, task.episode.number, task.output_path)
+
+    def update_watchlist_badge(self) -> None:
+        new = self.library.total_new()
+        index = self.pages.indexOf(self.watchlist_page)
+        self.nav_buttons[index].setText(f"  Watchlist ({new} new)" if new else "  Watchlist")
 
     def _tick(self) -> None:
         active = self.queue_page.refresh()
-        self.nav_buttons[1].setText(f"  Download Queue ({active})" if active else "  Download Queue")
+        index = self.pages.indexOf(self.queue_page)
+        self.nav_buttons[index].setText(f"  Download Queue ({active})" if active else "  Download Queue")
+        self._ticks += 1
+        if self._ticks % 20 == 0:  # downloads are recorded from other threads, so refresh now and then
+            self.update_watchlist_badge()
 
     # ================================================================== services used by pages
     def notify(self, message: str, timeout_ms: int = 6000) -> None:
