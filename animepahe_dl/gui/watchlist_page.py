@@ -36,7 +36,6 @@ class WatchRow(QFrame):
     def __init__(self, page: "WatchlistPage", show: Followed, new: list[float]) -> None:
         super().__init__()
         self.setObjectName("queueRow")
-        self.show_ = show
         outer = QHBoxLayout(self)
         outer.setContentsMargins(14, 12, 16, 12)
         outer.setSpacing(14)

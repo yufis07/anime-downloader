@@ -11,10 +11,9 @@ from PySide6.QtWidgets import (
 )
 
 from ..animepahe import AnimePahe
-from ..config import AUDIO_CHOICES, QUALITIES
+from ..config import AUDIO_CHOICES, AUDIO_LABELS, QUALITIES
 from ..http import CloudflareChallenge, HttpClient
 from ..utils import find_ffmpeg
-from .search_page import AUDIO_LABELS
 from .setup_wizard import FfmpegInstaller
 from .theme import ICON_STYLES, emphasize
 

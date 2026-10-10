@@ -97,9 +97,6 @@ class ElidedLabel(QLabel):
         self.setMinimumWidth(20)
         self.set_full_text(text)
 
-    def full_text(self) -> str:
-        return self._full
-
     def set_full_text(self, text: str) -> None:
         text = " ".join(text.split())  # one line
         if text != self._full:

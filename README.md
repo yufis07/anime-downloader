@@ -175,11 +175,14 @@ Settings and the browser profile live in `%APPDATA%\AnimePaheDL`.
 | `animepahe_dl/hls.py` | HLS parser and parallel AES-128 segment downloader with resume |
 | `animepahe_dl/downloader.py` | Download queue, parallel episodes, ffmpeg remux |
 | `animepahe_dl/http.py` | HTTP client with Chrome TLS impersonation, retries and challenge detection |
-| `animepahe_dl/gui/` | PySide6 (Qt 6) interface: sidebar window, search/queue/settings pages, cards, theme, verification browser |
+| `animepahe_dl/config.py` | Settings (JSON), data-folder logic incl. portable mode, site and audio constants |
+| `animepahe_dl/utils.py` | File-name safety, episode ranges, formatting, ffmpeg lookup |
+| `animepahe_dl/gui/` | PySide6 (Qt 6) interface: sidebar window, search / Discover, watchlist, queue and settings pages, show header, setup wizard, tray, theme, verification browser |
 | `animepahe_dl/cli.py` | Command-line interface |
 | `tests/` | Unit tests plus an offline end-to-end test against a fake local site |
 
-Run the tests with `python -m pytest -q`.
+Run the tests with `python -m pytest -q`. CI also lints with `python -m flake8 --select=F animepahe_dl tests tools run.py`
+(unused imports and names).
 
 ## Troubleshooting
 

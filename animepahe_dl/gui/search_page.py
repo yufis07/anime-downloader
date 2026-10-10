@@ -7,18 +7,18 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
+    QCheckBox, QComboBox, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
     QPushButton, QScrollArea, QStackedWidget, QVBoxLayout, QWidget,
 )
 
-from ..animepahe import Anime, Episode, parse_anime_session
-from ..mal import MalLookup
 from ..animeheaven import parse_anime_id
-from ..config import AUDIO_CHOICES, QUALITIES, SITE_LABELS, SITES
+from ..animepahe import Anime, Episode, parse_anime_session
+from ..config import AUDIO_CHOICES, AUDIO_LABELS, QUALITIES, SITE_LABELS, SITES
+from ..mal import MalLookup
 from ..utils import format_episode, parse_episode_selection
-from .theme import emphasize, line_icon, placeholder_poster, rounded_pixmap
 from .detail_header import ShowHeader
 from .discover_view import DiscoverView
+from .theme import emphasize, line_icon
 from .widgets import AnimeCard, FlowLayout
 
 if TYPE_CHECKING:
@@ -26,9 +26,6 @@ if TYPE_CHECKING:
 
 def _norm(text: str) -> str:
     return "".join(ch for ch in text.casefold() if ch.isalnum())
-
-
-AUDIO_LABELS = {"jpn": "Japanese (sub)", "eng": "English (dub)", "any": "Any audio"}
 
 
 class SearchPage(QWidget):

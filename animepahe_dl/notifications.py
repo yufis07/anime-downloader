@@ -13,7 +13,6 @@ class QueueSummary:
     done: int = 0
     skipped: int = 0
     failed: int = 0
-    cancelled: int = 0
     title: str = ""  # "Show - Episode 03" when exactly one episode was downloaded
     error: str = ""  # the message of the failure when exactly one episode failed
 
@@ -57,9 +56,7 @@ class QueueWatcher:
             elif task.status == Status.SKIPPED:
                 summary.skipped += 1
             elif task.status == Status.FAILED:
-                summary.failed += 1
-            else:
-                summary.cancelled += 1
+                summary.failed += 1  # cancelled downloads are not reported
         if len(self._tracked) == 1:
             only = next(iter(self._tracked.values()))
             summary.title = f"{only.anime_title} — Episode {format_episode(only.episode.number)}"
