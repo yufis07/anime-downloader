@@ -17,6 +17,7 @@ from ..animeheaven import parse_anime_id
 from ..config import AUDIO_CHOICES, QUALITIES, SITE_LABELS, SITES
 from ..utils import format_episode, parse_episode_selection
 from .theme import emphasize, line_icon, placeholder_poster, rounded_pixmap
+from .detail_header import ShowHeader
 from .widgets import AnimeCard, FlowLayout
 
 if TYPE_CHECKING:
@@ -34,11 +35,13 @@ class SearchPage(QWidget):
         layout.setContentsMargins(28, 24, 28, 16)
         layout.setSpacing(16)
 
-        title = QLabel("Search & Discover")
-        title.setObjectName("pageTitle")
-        layout.addWidget(title)
+        self.page_title = QLabel("Search & Discover")
+        self.page_title.setObjectName("pageTitle")
+        layout.addWidget(self.page_title)
 
-        bar = QHBoxLayout()
+        self.search_bar = QWidget()
+        bar = QHBoxLayout(self.search_bar)
+        bar.setContentsMargins(0, 0, 0, 0)
         bar.setSpacing(10)
         self.site = QComboBox()
         self.site.setToolTip("Which site to search and download from")
@@ -64,7 +67,7 @@ class SearchPage(QWidget):
         bar.addWidget(self.input, 1)
         bar.addWidget(self.search_btn)
         bar.addWidget(self.jp_btn)
-        layout.addLayout(bar)
+        layout.addWidget(self.search_bar)
         self.jp_label = QLabel("")
         self.jp_label.setObjectName("muted")
         self.jp_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -74,6 +77,8 @@ class SearchPage(QWidget):
 
         self.views = QStackedWidget()
         layout.addWidget(self.views, 1)
+        # The show page needs the whole height, so the search bar steps aside while it is open.
+        self.views.currentChanged.connect(self._view_changed)
 
         # --- results grid
         self.results_view = QWidget()
@@ -124,6 +129,13 @@ class SearchPage(QWidget):
             def load() -> list[Anime]:
                 return provider.search(text)
         self.ctx.run(load, self._show_results, retry=self.search, on_error=lambda: self._set_loading(False))
+
+    def _view_changed(self, _index: int) -> None:
+        searching = self.views.currentWidget() is self.results_view
+        self.page_title.setVisible(searching)
+        self.search_bar.setVisible(searching)
+        if not searching:
+            self.jp_label.hide()
 
     def _site_changed(self) -> None:
         self.ctx.settings.site = self.site.currentData()
@@ -184,7 +196,6 @@ class EpisodePanel(QWidget):
     """Episode checklist with Select All, range selection and bulk 'Add to Queue'."""
 
     back_requested = Signal()
-    POSTER_W, POSTER_H = 96, 136
 
     def __init__(self, ctx: "MainWindow") -> None:
         super().__init__()
@@ -196,40 +207,12 @@ class EpisodePanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        header = QFrame()
-        header.setObjectName("panel")
-        hl = QHBoxLayout(header)
-        hl.setContentsMargins(14, 14, 18, 14)
-        hl.setSpacing(16)
-        back = QPushButton("  Back to results")
-        back.setObjectName("ghost")
-        back.setIcon(line_icon("back"))
-        back.clicked.connect(self.back_requested.emit)
-        self.poster = QLabel()
-        self.poster.setFixedSize(self.POSTER_W, self.POSTER_H)
-        info = QVBoxLayout()
-        info.setSpacing(4)
-        self.title = QLabel()
-        self.title.setObjectName("pageTitle")
-        self.title.setWordWrap(True)
-        self.meta = QLabel()
-        self.meta.setObjectName("muted")
-        self.meta.setWordWrap(True)
-        self.follow_btn = QPushButton()
-        self.follow_btn.setCheckable(True)
-        self.follow_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.follow_btn.clicked.connect(self._toggle_follow)
-        top = QHBoxLayout()
-        top.addWidget(back, 0, Qt.AlignmentFlag.AlignLeft)
-        top.addStretch(1)
-        top.addWidget(self.follow_btn)
-        info.addLayout(top)
-        info.addWidget(self.title)
-        info.addWidget(self.meta)
-        info.addStretch(1)
-        hl.addWidget(self.poster)
-        hl.addLayout(info, 1)
-        layout.addWidget(header)
+        self.header = ShowHeader()
+        self.header.back_btn.clicked.connect(self.back_requested.emit)
+        self.header.follow_btn.clicked.connect(self._toggle_follow)
+        self.follow_btn = self.header.follow_btn
+        self.poster, self.title, self.meta = self.header.poster, self.header.title, self.header.meta
+        layout.addWidget(self.header)
 
         controls = QHBoxLayout()
         controls.setSpacing(10)
@@ -294,9 +277,7 @@ class EpisodePanel(QWidget):
     def load(self, anime: Anime) -> None:
         self.anime = anime
         self.episodes = []
-        self.title.setText(anime.title)
-        self.meta.setText(anime.subtitle or "Loading details…")
-        self.poster.setPixmap(placeholder_poster(anime.title, self.POSTER_W, self.POSTER_H))
+        self.header.reset(anime.title, anime.subtitle or "Loading details…")
         if anime.poster:
             self.ctx.load_image(anime.poster, self, self._set_cover(anime))
         self.quality.setCurrentIndex(max(0, self.quality.findData(self.ctx.settings.quality)))
@@ -319,11 +300,22 @@ class EpisodePanel(QWidget):
         self.audio.setEnabled(not heaven)
         provider = self.ctx.provider(anime.site)
         self.ctx.run(lambda: provider.episodes(anime.session), done, retry=lambda: self.load(anime))
+        self.ctx.jobs.submit(lambda: self.ctx.details.fetch(anime.title), lambda d: self._show_details(anime, d),
+                             lambda _exc: None)
+
+    def _show_details(self, anime: Anime, details) -> None:  # type: ignore[no-untyped-def]
+        """Synopsis, genres, score and banner from AniList (silently skipped when unavailable)."""
+        if details is None or self.anime is not anime:
+            return
+        self.header.set_details(details)
+        if details.banner_url:
+            self.ctx.load_image(details.banner_url, self,
+                                lambda pix: self.header.set_banner(pix) if self.anime is anime else None)
 
     def _set_cover(self, anime: Anime):  # type: ignore[no-untyped-def]
         def apply(pix: QPixmap) -> None:
             if self.anime is anime:
-                self.poster.setPixmap(rounded_pixmap(pix, self.POSTER_W, self.POSTER_H, 8))
+                self.header.set_cover(pix)
         return apply
 
     def _fill(self, episodes: list[Episode]) -> None:
