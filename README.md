@@ -7,6 +7,14 @@ downloads the episodes you pick, several at a time, as `.mp4` files.
 
 ## Features
 
+- **First-run setup.** The first start opens a three-step wizard: download folder, ffmpeg (one click downloads
+  the official Windows build, checks its SHA-256 and keeps it in the app's data folder), and your preferences.
+  Run it again any time with **Settings → Run setup again…**.
+- **Portable mode.** Create an empty file called `portable.txt` next to `AnimePaheDL.exe`. Settings, the watchlist,
+  the verification browser, ffmpeg and the default download folder (`Anime`) then live inside that folder, so you
+  can carry it on a USB stick. (`ANIMEPAHEDL_DATA=<folder>` also moves the data folder.)
+- **Your own icon.** Put `AnimePaheDL.ico` (or `.png`, or `icon.ico` / `icon.png`) next to the exe or in the data
+  folder and the window, taskbar and tray use it. Pick any picture you like; the repository ships no third-party art.
 - **Tray icon and notifications.** A tray icon shows the download status in its tooltip and has *Open*, *Pause
   all / Resume all* and *Quit*. When you are in another app, Windows tells you when the queue finishes (one
   line for one episode, a count for many; failures are named) and when the start-up check finds new episodes of
@@ -68,6 +76,8 @@ The app ends up in `dist\AnimePaheDL\AnimePaheDL.exe`. To run from source withou
 use `run.bat` or `python run.py`.
 
 ### Recommended: ffmpeg for .mp4 files
+
+The setup wizard (and **Settings → FFmpeg → Install ffmpeg**) can install it for you. By hand:
 
 ```bat
 winget install Gyan.FFmpeg
@@ -150,6 +160,7 @@ Settings and the browser profile live in `%APPDATA%\AnimePaheDL`.
 | `animepahe_dl/animepahe.py` | Site API client: search, episodes, source scraping and selection |
 | `animepahe_dl/mal.py` | English title → Japanese (romaji) title lookup on MyAnimeList (Jikan API) |
 | `animepahe_dl/animeheaven.py` | AnimeHeaven client: search, episode list, direct video link |
+| `animepahe_dl/ffmpeg_install.py` | One-click ffmpeg download with SHA-256 check (setup wizard, Settings) |
 | `animepahe_dl/notifications.py` | Decides when to notify: queue finished summary, new watchlist episodes |
 | `animepahe_dl/updates.py` | Update check against the rolling `latest` release (compares build commits) |
 | `animepahe_dl/discover.py` | Trending / this season / top rated lists for the Discover home (AniList, cached) |

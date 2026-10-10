@@ -316,7 +316,27 @@ def rounded_pixmap(source: QPixmap, width: int, height: int, radius: float = 10)
     return out
 
 
+CUSTOM_ICON_NAMES = ("AnimePaheDL.ico", "AnimePaheDL.png", "icon.ico", "icon.png")
+
+
+def custom_icon() -> QIcon | None:
+    """A picture the user dropped next to the exe (or into the data folder) replaces the built-in icon."""
+    from ..config import app_data_dir, app_dir
+
+    for folder in (app_dir(), app_data_dir()):
+        for name in CUSTOM_ICON_NAMES:
+            path = folder / name
+            if path.is_file():
+                icon = QIcon(str(path))
+                if not icon.isNull():
+                    return icon
+    return None
+
+
 def app_icon() -> QIcon:
+    custom = custom_icon()
+    if custom is not None:
+        return custom
     icon = QIcon()
     for size in (16, 24, 32, 48, 64, 128, 256):
         pix = QPixmap(size, size)

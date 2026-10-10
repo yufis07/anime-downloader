@@ -15,6 +15,7 @@ from ..config import AUDIO_CHOICES, QUALITIES
 from ..http import CloudflareChallenge, HttpClient
 from ..utils import find_ffmpeg
 from .search_page import AUDIO_LABELS
+from .setup_wizard import FfmpegInstaller
 from .theme import emphasize
 
 if TYPE_CHECKING:
@@ -117,6 +118,9 @@ class SettingsPage(QWidget):
         self.ffmpeg_status.setWordWrap(True)
         form.addRow("", self.ffmpeg_status)
         self.ffmpeg.textChanged.connect(self._update_ffmpeg_status)
+        self.ffmpeg_installer = FfmpegInstaller(ctx)
+        self.ffmpeg_installer.changed.connect(lambda: self.ffmpeg.setText(self.ctx.settings.ffmpeg_path))
+        form.addRow("", self.ffmpeg_installer)
         layout.addWidget(box)
 
         # Site & Cloudflare
@@ -188,6 +192,10 @@ class SettingsPage(QWidget):
         save = emphasize(QPushButton("Save settings"))
         save.setObjectName("primary")
         save.clicked.connect(self.save)
+        setup = QPushButton("Run setup again…")
+        setup.setObjectName("ghost")
+        setup.clicked.connect(self.ctx.run_setup)
+        footer.addWidget(setup)
         footer.addWidget(self.saved_label, 1)
         footer.addWidget(revert)
         footer.addWidget(save)
@@ -216,6 +224,7 @@ class SettingsPage(QWidget):
         self.base_url.setText(s.base_url)
         self.heaven_url.setText(s.animeheaven_url)
         self._update_ffmpeg_status()
+        self.ffmpeg_installer.refresh()
         self._update_cf_status()
         self.saved_label.setText("")
         self.site_status.setText("")

@@ -17,8 +17,42 @@ QUALITIES = (1080, 720, 480, 360)
 AUDIO_CHOICES = ("jpn", "eng", "any")
 
 
+PORTABLE_MARKERS = ("portable.txt", "portable.flag")
+
+
+def app_dir() -> Path:
+    """Folder of the exe (frozen build) or of the project (running from source)."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[1]
+
+
+def portable_root(folder: Path | None = None) -> Path | None:
+    """The app folder when it is a portable install (a ``portable.txt`` file lies next to the exe)."""
+    folder = folder or app_dir()
+    return folder if any((folder / marker).is_file() for marker in PORTABLE_MARKERS) else None
+
+
+def is_portable() -> bool:
+    return bool(os.environ.get("ANIMEPAHEDL_DATA")) or portable_root() is not None
+
+
 def app_data_dir() -> Path:
-    """%APPDATA%\\AnimePaheDL on Windows, ~/.config/AnimePaheDL elsewhere."""
+    """Where settings, library and the verification browser live.
+
+    Portable install (``portable.txt`` next to the exe, or ``ANIMEPAHEDL_DATA`` set): ``<app folder>\\data``
+    so everything moves with the folder. Otherwise %APPDATA%\\AnimePaheDL on Windows, ~/.config/AnimePaheDL
+    elsewhere."""
+    override = os.environ.get("ANIMEPAHEDL_DATA")
+    if override:
+        path = Path(override)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+    root = portable_root()
+    if root:
+        path = root / "data"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
     if sys.platform == "win32":
         base = Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming"))
     else:
@@ -29,6 +63,9 @@ def app_data_dir() -> Path:
 
 
 def default_download_dir() -> Path:
+    root = portable_root()
+    if root:
+        return root / "Anime"
     if sys.platform == "win32":
         return Path.home() / "Videos" / "Anime"
     return Path.home() / "Downloads" / "Anime"
@@ -52,6 +89,7 @@ class Settings:
     notify_finished: bool = True  # notification when the download queue empties
     notify_new_episodes: bool = True  # notification when the start-up check finds new watchlist episodes
     close_to_tray: bool = False  # closing the window keeps downloading in the tray
+    setup_done: bool = False  # the first-run wizard has been shown
     check_updates: bool = True
     update_token: str = ""  # optional read-only GitHub token, needed while the repository is private
     dismissed_update: str = ""  # commit of the update banner the user closed
@@ -78,6 +116,8 @@ class Settings:
         for key, value in data.items():
             if key in known:
                 setattr(settings, key, value)
+        if "setup_done" not in data:  # settings from before the wizard existed: do not nag existing users
+            settings.setup_done = True
         settings.normalize()
         return settings
 
