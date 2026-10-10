@@ -233,6 +233,71 @@ class HttpClient:
         assert last_error is not None
         raise last_error
 
+    def download_file(
+        self,
+        url: str,
+        dest: Any,
+        *,
+        referer: str | None = None,
+        progress: Any = None,
+        should_stop: Any = None,
+        wait_if_paused: Any = None,
+        chunk_size: int = 256 * 1024,
+    ) -> int:
+        """Stream ``url`` to ``dest`` (a ``Path``), resuming a partial file with a Range request.
+
+        ``progress(done, total, added)`` is called after every chunk (``total`` is 0 when unknown),
+        ``should_stop()`` returns True to abort (raises ``InterruptedError``) and ``wait_if_paused()``
+        blocks while downloads are paused. Returns the final size in bytes.
+        """
+        from pathlib import Path
+
+        dest = Path(dest)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        done = dest.stat().st_size if dest.exists() else 0
+        headers = {"User-Agent": self.user_agent, "Accept": "*/*"}
+        if referer:
+            headers["Referer"] = referer
+        if done:
+            headers["Range"] = f"bytes={done}-"
+        try:
+            raw = self._session().get(url, headers=headers, timeout=self.timeout, stream=True, allow_redirects=True)
+        except Exception as exc:
+            self._local = threading.local()
+            raise HttpError(f"Network error for {url}: {exc}") from exc
+        try:
+            status = raw.status_code
+            if status == 416 and done:  # asked for bytes past the end: the file is already complete
+                return done
+            if status >= 400:
+                raise HttpError(f"HTTP {status} for {url}", status)
+            length = int(raw.headers.get("content-length") or 0)
+            if status == 206 and done:
+                total = done + length if length else 0
+                mode = "ab"
+            else:  # server ignored the Range header (or a fresh start): start over
+                done, total, mode = 0, length, "wb"
+            with open(dest, mode) as fh:
+                for chunk in (raw.iter_content() if self.backend == "curl_cffi" else raw.iter_content(chunk_size)):
+                    if wait_if_paused:
+                        wait_if_paused()
+                    if should_stop and should_stop():
+                        raise InterruptedError("stopped")
+                    if not chunk:
+                        continue
+                    fh.write(chunk)
+                    done += len(chunk)
+                    if progress:
+                        progress(done, total, len(chunk))
+            if total and done < total:
+                raise HttpError(f"Download ended early ({done} of {total} bytes)")
+            return done
+        finally:
+            try:
+                raw.close()
+            except Exception:  # noqa: BLE001
+                pass
+
     def get_text(self, url: str, **kwargs: Any) -> str:
         return self.get(url, **kwargs).text
 

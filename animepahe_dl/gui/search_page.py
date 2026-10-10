@@ -13,7 +13,8 @@ from PySide6.QtWidgets import (
 
 from ..animepahe import Anime, Episode, parse_anime_session
 from ..mal import MalLookup
-from ..config import AUDIO_CHOICES, QUALITIES
+from ..animeheaven import parse_anime_id
+from ..config import AUDIO_CHOICES, QUALITIES, SITE_LABELS, SITES
 from ..utils import format_episode, parse_episode_selection
 from .theme import emphasize, line_icon, placeholder_poster, rounded_pixmap
 from .widgets import AnimeCard, FlowLayout
@@ -39,6 +40,12 @@ class SearchPage(QWidget):
 
         bar = QHBoxLayout()
         bar.setSpacing(10)
+        self.site = QComboBox()
+        self.site.setToolTip("Which site to search and download from")
+        for key in SITES:
+            self.site.addItem(SITE_LABELS[key], key)
+        self.site.setCurrentIndex(max(0, self.site.findData(ctx.settings.site)))
+        self.site.currentIndexChanged.connect(self._site_changed)
         self.input = QLineEdit()
         self.input.setObjectName("searchInput")
         self.input.setPlaceholderText("Search anime by title, or paste an AnimePahe link…")
@@ -53,6 +60,7 @@ class SearchPage(QWidget):
         self.jp_btn.setToolTip("Look the English title up on MyAnimeList and show its Japanese (romaji) title")
         self.jp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.jp_btn.clicked.connect(self.lookup_japanese)
+        bar.addWidget(self.site)
         bar.addWidget(self.input, 1)
         bar.addWidget(self.search_btn)
         bar.addWidget(self.jp_btn)
@@ -106,14 +114,20 @@ class SearchPage(QWidget):
             return
         self.views.setCurrentWidget(self.results_view)
         self._set_loading(True, f"Searching for “{text}”…")
-        session = parse_anime_session(text)
+        site = self.site.currentData()
+        provider = self.ctx.provider(site)
+        session = parse_anime_id(text) if site == "animeheaven" else parse_anime_session(text)
         if session:
             def load() -> list[Anime]:
-                return [Anime(session=session, title=self.ctx.api.anime_title(session))]
+                return [Anime(session=session, title=provider.anime_title(session), site=site)]
         else:
             def load() -> list[Anime]:
-                return self.ctx.api.search(text)
+                return provider.search(text)
         self.ctx.run(load, self._show_results, retry=self.search, on_error=lambda: self._set_loading(False))
+
+    def _site_changed(self) -> None:
+        self.ctx.settings.site = self.site.currentData()
+        self.ctx.settings.save()
 
     def lookup_japanese(self) -> None:
         text = self.input.text().strip()
@@ -285,7 +299,11 @@ class EpisodePanel(QWidget):
             if self.anime is anime:
                 self._fill(episodes)
 
-        self.ctx.run(lambda: self.ctx.api.episodes(anime.session), done, retry=lambda: self.load(anime))
+        heaven = anime.site == "animeheaven"
+        self.quality.setEnabled(not heaven)  # AnimeHeaven offers a single video per episode
+        self.audio.setEnabled(not heaven)
+        provider = self.ctx.provider(anime.site)
+        self.ctx.run(lambda: provider.episodes(anime.session), done, retry=lambda: self.load(anime))
 
     def _set_cover(self, anime: Anime):  # type: ignore[no-untyped-def]
         def apply(pix: QPixmap) -> None:
@@ -379,7 +397,7 @@ class EpisodePanel(QWidget):
         chosen = self.checked_episodes()
         if not chosen:
             return
-        added = self.ctx.manager.add(self.anime.title, self.anime.session, chosen)
+        added = self.ctx.manager.add(self.anime.title, self.anime.session, chosen, site=self.anime.site)
         skipped = len(chosen) - len(added)
         message = f"Added {len(added)} episode(s) of {self.anime.title} to the queue"
         if skipped:

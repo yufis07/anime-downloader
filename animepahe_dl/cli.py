@@ -3,6 +3,7 @@
 Examples::
 
     AnimePaheDL.exe cli search "frieren"
+    AnimePaheDL.exe cli search "frieren" --site animeheaven
     AnimePaheDL.exe cli japanese "Frieren: Beyond Journey's End"
     AnimePaheDL.exe cli download https://animepahe.pw/anime/<uuid> -e 1-12 -q 720 -a eng
 """
@@ -13,12 +14,17 @@ import argparse
 import sys
 import time
 
+from .animeheaven import AnimeHeaven, parse_anime_id
 from .animepahe import AnimePahe, parse_anime_session
 from .config import Settings
 from .downloader import DownloadManager, Status
 from .http import CloudflareChallenge, HttpClient, HttpError
 from .mal import MalLookup
 from .utils import format_episode, format_speed, parse_episode_selection
+
+
+def _heaven(settings: Settings) -> AnimeHeaven:
+    return AnimeHeaven(HttpClient(), settings.animeheaven_url)
 
 
 def _build(args: argparse.Namespace) -> tuple[Settings, AnimePahe]:
@@ -37,7 +43,13 @@ def _build(args: argparse.Namespace) -> tuple[Settings, AnimePahe]:
 
 
 def cmd_search(args: argparse.Namespace) -> int:
-    _, api = _build(args)
+    settings, api = _build(args)
+    if args.site == "animeheaven":
+        heaven = _heaven(settings)
+        for index, anime in enumerate(heaven.search(args.query), 1):
+            print(f"{index:2}. {anime.title}")
+            print(f"    {heaven.base_url}/anime.php?{anime.session}")
+        return 0
     for index, anime in enumerate(api.search(args.query), 1):
         print(f"{index:2}. {anime.title}  [{anime.subtitle}]")
         print(f"    {api.base_url}/anime/{anime.session}")
@@ -72,17 +84,20 @@ def cmd_download(args: argparse.Namespace) -> int:
         settings.rename_japanese = True
     settings.normalize()
 
-    session = parse_anime_session(args.anime)
+    heaven = _heaven(settings)
+    site = "animeheaven" if args.site == "animeheaven" or parse_anime_id(args.anime) else "animepahe"
+    provider = heaven if site == "animeheaven" else api
+    session = parse_anime_id(args.anime) if site == "animeheaven" else parse_anime_session(args.anime)
     if session:
-        title = api.anime_title(session)
+        title = provider.anime_title(session)
     else:
-        results = api.search(args.anime)
+        results = provider.search(args.anime)
         if not results:
             print("No anime found.")
             return 1
         session, title = results[0].session, results[0].title
-    print(f"Anime: {title}")
-    episodes = api.episodes(session)
+    print(f"Anime: {title} ({site})")
+    episodes = provider.episodes(session)
     wanted = set(parse_episode_selection(args.episodes, [e.number for e in episodes]))
     chosen = [e for e in episodes if e.number in wanted]
     if not chosen:
@@ -90,8 +105,8 @@ def cmd_download(args: argparse.Namespace) -> int:
         return 1
     print(f"Downloading {len(chosen)} episode(s) to {settings.download_dir}")
 
-    manager = DownloadManager(api, settings)
-    manager.add(title, session, chosen)
+    manager = DownloadManager(api, settings, animeheaven=heaven)
+    manager.add(title, session, chosen, site=site)
     try:
         while manager.is_busy():
             line = " | ".join(
@@ -121,6 +136,7 @@ def main(argv: list[str] | None = None) -> int:
 
     search = sub.add_parser("search", help="Search anime by title")
     search.add_argument("query")
+    search.add_argument("--site", choices=("animepahe", "animeheaven"), default="animepahe")
     search.set_defaults(func=cmd_search)
 
     japanese = sub.add_parser("japanese", help="Look up an English title on MyAnimeList and print its Japanese (romaji) title")
@@ -129,6 +145,8 @@ def main(argv: list[str] | None = None) -> int:
 
     download = sub.add_parser("download", help="Download episodes")
     download.add_argument("anime", help="Anime URL, session id or search text (first hit is used)")
+    download.add_argument("--site", choices=("animepahe", "animeheaven"), default="animepahe",
+                          help="Where to download from (an animeheaven.me/anime.php?... link picks it automatically)")
     download.add_argument("-e", "--episodes", default="all", help="e.g. 1-12,15 or 20- (default: all)")
     download.add_argument("-q", "--quality", type=int, choices=(1080, 720, 480, 360))
     download.add_argument("-a", "--audio", choices=("jpn", "eng", "any"))

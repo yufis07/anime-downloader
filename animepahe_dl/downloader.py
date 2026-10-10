@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import kwik
+from .animeheaven import AnimeHeaven
 from .animepahe import AnimePahe, Episode, choose_source
 from .config import Settings
 from .hls import Cancelled, HlsDownloader, load_media_playlist
@@ -46,6 +47,7 @@ class DownloadTask:
     anime_title: str
     anime_session: str
     episode: Episode
+    site: str = "animepahe"
     id: int = field(default_factory=lambda: next(_ids))
     status: Status = Status.QUEUED
     source_label: str = ""
@@ -107,7 +109,7 @@ def build_output_path(settings: Settings, anime_title: str, episode: Episode, re
     values = {
         "anime": anime_title,
         "episode": format_episode(episode.number),
-        "quality": f"{resolution}p",
+        "quality": f"{resolution}p" if resolution else "",
         "audio": audio,
         "title": episode.title or "",
     }
@@ -165,8 +167,10 @@ class DownloadManager:
     """Thread-based download queue. The GUI polls :meth:`snapshot` to render progress."""
 
     def __init__(self, api: AnimePahe, settings: Settings,
-                 on_cloudflare: Callable[[], None] | None = None, mal: MalLookup | None = None) -> None:
+                 on_cloudflare: Callable[[], None] | None = None, mal: MalLookup | None = None,
+                 animeheaven: AnimeHeaven | None = None) -> None:
         self.api = api
+        self.animeheaven = animeheaven
         self.settings = settings
         self._mal = mal
         self._japanese_cache: dict[str, str | None] = {}
@@ -183,11 +187,12 @@ class DownloadManager:
         self._dispatcher.start()
 
     # ---------------------------------------------------------------- public API
-    def add(self, anime_title: str, anime_session: str, episodes: list[Episode]) -> list[DownloadTask]:
-        new = [DownloadTask(anime_title, anime_session, ep) for ep in episodes]
+    def add(self, anime_title: str, anime_session: str, episodes: list[Episode],
+            site: str = "animepahe") -> list[DownloadTask]:
+        new = [DownloadTask(anime_title, anime_session, ep, site=site) for ep in episodes]
         with self._cond:
-            existing = {(t.anime_session, t.episode.session) for t in self._tasks if not t.status.finished}
-            new = [t for t in new if (t.anime_session, t.episode.session) not in existing]
+            existing = {(t.site, t.anime_session, t.episode.session) for t in self._tasks if not t.status.finished}
+            new = [t for t in new if (t.site, t.anime_session, t.episode.session) not in existing]
             self._tasks.extend(new)
             self._cond.notify_all()
         return new
@@ -325,6 +330,8 @@ class DownloadManager:
             raise Cancelled()
 
     def _process(self, task: DownloadTask) -> None:
+        if task.site == "animeheaven":
+            return self._process_animeheaven(task)
         settings = self.settings
         task.status = Status.RESOLVING
         task.message = "Reading episode page"
@@ -396,19 +403,125 @@ class DownloadManager:
             pass
         if output == final_mp4:
             task.message = ""
-        if settings.rename_japanese:
-            japanese = japanese or self.japanese_title(task.anime_title)
-            if japanese:
-                if output == move_target(settings, japanese, task.episode, source.resolution, source.audio, output):
-                    task.message = f"Name already matches MyAnimeList title ({japanese})"
-                try:
-                    output = move_to_japanese_name(settings, japanese, task.episode, source.resolution,
-                                                   source.audio, output)
-                except OSError as exc:
-                    task.message = f"Kept English name ({exc})"
-            else:
-                reason = (f"MyAnimeList lookup failed: {self._japanese_error}" if self._japanese_error
-                          else "no match found on MyAnimeList")
-                task.message = f"Kept original name ({reason})"
+        output = self._apply_japanese_name(task, output, source.resolution, source.audio, japanese)
+        task.output_path = str(output)
+        task.status = Status.DONE
+
+    def _apply_japanese_name(self, task: DownloadTask, output: Path, resolution: int, audio: str,
+                             japanese: str | None = None) -> Path:
+        """Rename the finished file/folder to the Japanese (romaji) title when the setting is on."""
+        settings = self.settings
+        if not settings.rename_japanese:
+            return output
+        japanese = japanese or self.japanese_title_for(task)
+        if not japanese:
+            reason = (f"MyAnimeList lookup failed: {self._japanese_error}" if self._japanese_error
+                      else "no match found on MyAnimeList")
+            task.message = f"Kept original name ({reason})"
+            return output
+        if output == move_target(settings, japanese, task.episode, resolution, audio, output):
+            task.message = f"Name already matches MyAnimeList title ({japanese})"
+        try:
+            return move_to_japanese_name(settings, japanese, task.episode, resolution, audio, output)
+        except OSError as exc:
+            task.message = f"Kept English name ({exc})"
+            return output
+
+    def japanese_title_for(self, task: DownloadTask) -> str | None:
+        """AnimeHeaven lists the romaji title itself; AnimePahe titles are looked up on MyAnimeList."""
+        if task.site == "animeheaven" and self.animeheaven:
+            try:
+                title = self.animeheaven.japanese_title(task.anime_session)
+            except Exception:  # noqa: BLE001
+                title = ""
+            if title:
+                return title
+        return self.japanese_title(task.anime_title)
+
+    def _process_animeheaven(self, task: DownloadTask) -> None:
+        settings = self.settings
+        site = self.animeheaven
+        if site is None:
+            raise RuntimeError("AnimeHeaven is not configured")
+        task.status = Status.RESOLVING
+        task.message = "Reading episode page"
+        final_mp4 = build_output_path(settings, task.anime_title, task.episode, 0, task.episode.audio or "jpn")
+        candidates = [final_mp4, final_mp4.with_suffix(".ts")]
+        japanese = self.japanese_title_for(task) if settings.rename_japanese else None
+        if japanese:
+            jp = move_target(settings, japanese, task.episode, 0, task.episode.audio or "jpn", final_mp4)
+            candidates += [jp, jp.with_suffix(".ts")]
+        for existing in candidates:
+            if existing.exists() and existing.stat().st_size > 0:
+                task.status = Status.SKIPPED
+                task.output_path = str(existing)
+                task.message = ""
+                return
+
+        self._check_cancel(task)
+        url = site.video_url(task.episode.session)
+        task.source_label = "AnimeHeaven"
+        work_dir = Path(settings.download_dir) / ".parts" / sanitize_filename(
+            f"ah-{task.anime_session}-{task.episode.session[:12]}")
+        task.status = Status.DOWNLOADING
+        task.message = ""
+
+        if ".m3u8" in url.lower():
+            segments = load_media_playlist(site.http, url, site.referer)
+            task.segments_total = len(segments)
+
+            def on_hls(done: int, total: int, added: int) -> None:
+                task.segments_done, task.segments_total = done, total
+                if added:
+                    task.record_bytes(added)
+
+            combined = work_dir / "combined.ts"
+            HlsDownloader(site.http, segments, site.referer, work_dir, workers=settings.segment_workers,
+                          cancel_event=task.cancel_event, progress=on_hls, pause_gate=self._run_gate).download(combined)
+            self._check_cancel(task)
+            downloaded, needs_remux = combined, True
+        else:
+            def on_bytes(done: int, total: int, added: int) -> None:
+                task.segments_done, task.segments_total = done, total or done
+                if added:
+                    task.record_bytes(added)
+
+            def wait_if_paused() -> None:
+                while not self._run_gate.wait(0.25):
+                    if task.cancel_event.is_set():
+                        raise Cancelled()
+
+            part = work_dir / "video.mp4.part"
+            try:
+                site.http.download_file(url, part, referer=site.referer, progress=on_bytes,
+                                        should_stop=task.cancel_event.is_set, wait_if_paused=wait_if_paused)
+            except InterruptedError:
+                raise Cancelled() from None
+            downloaded, needs_remux = part, False
+
+        task.status = Status.MUXING if needs_remux else Status.DOWNLOADING
+        final_mp4.parent.mkdir(parents=True, exist_ok=True)
+        output = final_mp4
+        ffmpeg = find_ffmpeg(settings.ffmpeg_path) if needs_remux else None
+        if needs_remux and ffmpeg:
+            task.message = "Joining segments into MP4"
+            try:
+                remux_to_mp4(ffmpeg, downloaded, final_mp4)
+            except RuntimeError as exc:
+                output = final_mp4.with_suffix(".ts")
+                shutil.move(str(downloaded), output)
+                task.message = f"Saved as .ts ({exc})"
+        elif needs_remux:
+            output = final_mp4.with_suffix(".ts")
+            shutil.move(str(downloaded), output)
+            task.message = "Saved as .ts (install ffmpeg for .mp4)"
+        else:
+            os.replace(downloaded, final_mp4)
+        shutil.rmtree(work_dir, ignore_errors=True)
+        try:
+            (Path(settings.download_dir) / ".parts").rmdir()
+        except OSError:
+            pass
+        output = self._apply_japanese_name(task, output, 0, task.episode.audio or "jpn", japanese)
         task.output_path = str(output)
         task.status = Status.DONE
