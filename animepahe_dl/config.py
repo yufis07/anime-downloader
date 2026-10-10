@@ -15,6 +15,7 @@ SITE_LABELS = {"animepahe": "AnimePahe", "animeheaven": "AnimeHeaven"}
 DEFAULT_ANIMEHEAVEN_URL = "https://animeheaven.me"
 QUALITIES = (1080, 720, 480, 360)
 AUDIO_CHOICES = ("jpn", "eng", "any")
+AUDIO_LABELS = {"jpn": "Japanese (sub)", "eng": "English (dub)", "any": "Any audio"}
 
 
 PORTABLE_MARKERS = ("portable.txt", "portable.flag")

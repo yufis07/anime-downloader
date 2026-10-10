@@ -7,6 +7,7 @@ Plain ``requests`` is used as a fallback.
 
 from __future__ import annotations
 
+import json
 import random
 import string
 import threading
@@ -62,8 +63,6 @@ class Response:
         return self.content.decode("utf-8", errors="replace")
 
     def json(self) -> Any:
-        import json
-
         return json.loads(self.content)
 
 

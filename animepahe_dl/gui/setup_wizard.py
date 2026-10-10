@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
-from ..config import AUDIO_CHOICES, QUALITIES, SITE_LABELS, SITES, app_data_dir, is_portable
+from ..config import AUDIO_CHOICES, AUDIO_LABELS, QUALITIES, SITE_LABELS, SITES, app_data_dir, is_portable
 from ..ffmpeg_install import FfmpegInstallError, install_ffmpeg
 from ..http import HttpClient
 from ..utils import find_ffmpeg, format_bytes
@@ -19,8 +19,6 @@ from .theme import emphasize
 
 if TYPE_CHECKING:
     from .main_window import MainWindow
-
-AUDIO_LABELS = {"jpn": "Japanese (sub)", "eng": "English (dub)", "any": "Any audio"}
 
 
 class FfmpegInstaller(QWidget):
