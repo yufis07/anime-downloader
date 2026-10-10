@@ -144,6 +144,25 @@ class SettingsPage(QWidget):
         forget.clicked.connect(self._forget)
         form.addRow("Cloudflare", _row(self.cf_status, verify, forget))
         layout.addWidget(box)
+
+        # Updates
+        box, form = _section("Updates", "The app compares itself with the latest build published on GitHub "
+                                        "and shows a banner when there is a newer one.")
+        self.check_updates = QCheckBox("Check for updates when the app starts")
+        form.addRow("", self.check_updates)
+        self.update_token = QLineEdit()
+        self.update_token.setEchoMode(QLineEdit.EchoMode.Password)
+        self.update_token.setPlaceholderText("Only needed while the GitHub repository is private")
+        self.update_token.setToolTip("A read-only fine-grained token with 'Contents: read' for the repository. "
+                                     "It is stored in settings.json on this PC and sent only to api.github.com.")
+        form.addRow("GitHub token", self.update_token)
+        self.update_btn = QPushButton("Check now")
+        self.update_btn.clicked.connect(self._check_updates_now)
+        self.update_status = QLabel("")
+        self.update_status.setObjectName("muted")
+        self.update_status.setWordWrap(True)
+        form.addRow("", _row(self.update_status, self.update_btn))
+        layout.addWidget(box)
         layout.addStretch(1)
 
         footer = QHBoxLayout()
@@ -169,6 +188,8 @@ class SettingsPage(QWidget):
         self.audio.setCurrentIndex(max(0, self.audio.findData(s.audio)))
         self.no_av1.setChecked(s.prefer_non_av1)
         self.rename_jp.setChecked(s.rename_japanese)
+        self.check_updates.setChecked(s.check_updates)
+        self.update_token.setText(s.update_token)
         self.parallel.setValue(s.max_parallel_episodes)
         self.workers.setValue(s.segment_workers)
         self.ffmpeg.setText(s.ffmpeg_path)
@@ -187,6 +208,8 @@ class SettingsPage(QWidget):
         s.audio = self.audio.currentData()
         s.prefer_non_av1 = self.no_av1.isChecked()
         s.rename_japanese = self.rename_jp.isChecked()
+        s.check_updates = self.check_updates.isChecked()
+        s.update_token = self.update_token.text().strip()
         s.max_parallel_episodes = self.parallel.value()
         s.segment_workers = self.workers.value()
         s.ffmpeg_path = self.ffmpeg.text().strip()
@@ -198,6 +221,24 @@ class SettingsPage(QWidget):
         self.heaven_url.setText(s.animeheaven_url)
         self.saved_label.setText("✔ Settings saved")
         self.saved.emit()
+
+    def _check_updates_now(self) -> None:
+        if not self.ctx.build:
+            self.update_status.setText("This copy runs from source, so there is no build to compare.")
+            return
+        self.ctx.settings.update_token = self.update_token.text().strip()  # use the token typed above
+        self.update_btn.setEnabled(False)
+        self.update_status.setText("Checking…")
+
+        def done(result) -> None:  # type: ignore[no-untyped-def]
+            self.update_btn.setEnabled(True)
+            self.update_status.setText(result.message)
+
+        def failed(exc: Exception) -> None:
+            self.update_btn.setEnabled(True)
+            self.update_status.setText(f"Could not check: {exc}")
+
+        self.ctx.check_for_updates(on_result=done, on_error=failed)
 
     def _test_site(self) -> None:
         from ..config import Settings

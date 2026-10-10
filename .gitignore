@@ -1,4 +1,5 @@
 __pycache__/
+animepahe_dl/_build.py
 *.pyc
 .venv/
 build/
