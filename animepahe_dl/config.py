@@ -48,6 +48,10 @@ class Settings:
     ffmpeg_path: str = ""
     # After a download finishes, rename the file and folder to the anime's Japanese title (MyAnimeList).
     rename_japanese: bool = False
+    tray_icon: bool = True  # show a system-tray icon (needed for notifications)
+    notify_finished: bool = True  # notification when the download queue empties
+    notify_new_episodes: bool = True  # notification when the start-up check finds new watchlist episodes
+    close_to_tray: bool = False  # closing the window keeps downloading in the tray
     check_updates: bool = True
     update_token: str = ""  # optional read-only GitHub token, needed while the repository is private
     dismissed_update: str = ""  # commit of the update banner the user closed
