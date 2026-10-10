@@ -61,5 +61,13 @@ def test_other_errors_propagate():
         check_for_update(Http(error=HttpError("HTTP 502", 502)), OLD)
 
 
-def test_current_build_is_empty_from_source():
+def test_current_build_reads_the_stamp_and_is_empty_without_one(monkeypatch):
+    import sys
+    import types
+
+    monkeypatch.setitem(sys.modules, "animepahe_dl._build", None)  # an import of it fails: running from source
     assert updates.current_build() == ""
+    stamp = types.ModuleType("animepahe_dl._build")
+    stamp.BUILD_SHA = "c" * 40
+    monkeypatch.setitem(sys.modules, "animepahe_dl._build", stamp)  # what the CI build writes
+    assert updates.current_build() == "c" * 40
