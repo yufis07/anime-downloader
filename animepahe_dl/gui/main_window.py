@@ -19,6 +19,7 @@ from ..animeheaven import AnimeHeaven
 from ..animepahe import AnimePahe
 from ..config import Settings
 from ..details import DetailsClient
+from ..discover import DiscoverClient
 from ..downloader import DownloadManager
 from ..library import Library
 from ..http import DEFAULT_USER_AGENT, CloudflareChallenge, HttpClient
@@ -50,6 +51,7 @@ class MainWindow(QMainWindow):
         self.jobs = JobRunner(self)
         self.library = Library()
         self.details = DetailsClient()
+        self.discover = DiscoverClient()
         self._images: dict[str, QPixmap] = {}
         self._cf_prompt_pending = False
         self._verifying = False

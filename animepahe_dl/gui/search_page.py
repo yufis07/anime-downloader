@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
@@ -18,10 +18,15 @@ from ..config import AUDIO_CHOICES, QUALITIES, SITE_LABELS, SITES
 from ..utils import format_episode, parse_episode_selection
 from .theme import emphasize, line_icon, placeholder_poster, rounded_pixmap
 from .detail_header import ShowHeader
+from .discover_view import DiscoverView
 from .widgets import AnimeCard, FlowLayout
 
 if TYPE_CHECKING:
     from .main_window import MainWindow
+
+def _norm(text: str) -> str:
+    return "".join(ch for ch in text.casefold() if ch.isalnum())
+
 
 AUDIO_LABELS = {"jpn": "Japanese (sub)", "eng": "English (dub)", "any": "Any audio"}
 
@@ -104,6 +109,21 @@ class SearchPage(QWidget):
         body_layout.addStretch(1)
         self.scroll.setWidget(body)
         rv.addWidget(self.scroll, 1)
+        # Discover home: its own scroll area (a plain vertical layout), swapped with the results grid.
+        self.discover = DiscoverView(ctx)
+        self.discover.item_chosen.connect(self.search_for)
+        self.discover_scroll = QScrollArea()
+        self.discover_scroll.setWidgetResizable(True)
+        self.discover_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        discover_body = self.discover_body = QWidget()
+        discover_body.setObjectName("scrollBody")
+        self.discover.content_changed.connect(self._sync_discover_height)
+        db = QVBoxLayout(discover_body)
+        db.setContentsMargins(4, 4, 8, 16)
+        db.addWidget(self.discover)
+        db.addStretch(1)
+        self.discover_scroll.setWidget(discover_body)
+        rv.addWidget(self.discover_scroll, 1)
         self.views.addWidget(self.results_view)
 
         # --- episode selection
@@ -111,6 +131,9 @@ class SearchPage(QWidget):
         self.episodes_view.back_requested.connect(lambda: self.views.setCurrentWidget(self.results_view))
         self.views.addWidget(self.episodes_view)
         self.cards: list[AnimeCard] = []
+        self._set_discover(True)  # the Discover home fills the page until the first search
+        self.input.textChanged.connect(self._text_changed)
+        QTimer.singleShot(400, self.discover.load)
 
     # ------------------------------------------------------------------ search
     def search(self) -> None:
@@ -118,6 +141,7 @@ class SearchPage(QWidget):
         if not text:
             return
         self.views.setCurrentWidget(self.results_view)
+        self._set_discover(False)
         self._set_loading(True, f"Searching for “{text}”…")
         site = self.site.currentData()
         provider = self.ctx.provider(site)
@@ -129,6 +153,62 @@ class SearchPage(QWidget):
             def load() -> list[Anime]:
                 return provider.search(text)
         self.ctx.run(load, self._show_results, retry=self.search, on_error=lambda: self._set_loading(False))
+
+    def show_discover(self) -> None:
+        """Back to the Discover home (used when the search box is cleared)."""
+        self.results_label.setText("")
+        self.grid.clear()
+        self.cards = []
+        self._set_discover(True)
+
+    def _sync_discover_height(self) -> None:
+        """QScrollArea does not grow its widget to the layout's minimum height on its own, so the rows
+        would be squeezed instead of scrolled; state the minimum explicitly."""
+        QTimer.singleShot(0, self._apply_discover_height)
+
+    def _apply_discover_height(self) -> None:
+        height = self.discover.minimumSizeHint().height() + 24
+        if height != self.discover_body.minimumHeight():
+            self.discover_body.setMinimumHeight(height)
+
+    def _set_discover(self, on: bool) -> None:
+        self.discover_scroll.setVisible(on)
+        self.scroll.setVisible(not on)
+        self.results_label.setVisible(not on)
+        if on:
+            self.empty.hide()
+
+    def _text_changed(self, text: str) -> None:
+        if not text.strip() and self.views.currentWidget() is self.results_view and self.search_btn.isEnabled():
+            self.show_discover()
+
+    def search_for(self, item) -> None:  # type: ignore[no-untyped-def]
+        """A Discover title was clicked: find it on the active site, trying the English name first."""
+        site = self.site.currentData()
+        provider = self.ctx.provider(site)
+        names = item.search_titles
+        self.input.blockSignals(True)
+        self.input.setText(names[0])
+        self.input.blockSignals(False)
+        self.views.setCurrentWidget(self.results_view)
+        self._set_discover(False)
+        self._set_loading(True, f"Looking for “{names[0]}” on {SITE_LABELS[site]}…")
+
+        def load() -> list[Anime]:
+            for name in names:
+                found = provider.search(name)
+                if found:
+                    return found
+            return []
+
+        def done(results: list[Anime]) -> None:
+            self._show_results(results)
+            wanted = {_norm(n) for n in names}
+            exact = [a for a in results if _norm(a.title) in wanted]
+            if len(exact) == 1:  # unmistakable: go straight to its episodes
+                self.open_anime(exact[0])
+
+        self.ctx.run(load, done, retry=lambda: self.search_for(item), on_error=lambda: self._set_loading(False))
 
     def _view_changed(self, _index: int) -> None:
         searching = self.views.currentWidget() is self.results_view
@@ -172,6 +252,7 @@ class SearchPage(QWidget):
         self._set_loading(False)
         self.grid.clear()
         self.cards = []
+        self._set_discover(False)
         self.empty.setVisible(not results)
         if not results:
             self.empty.setText("No anime matched your search.\nCheck the spelling or try another title.")
