@@ -516,7 +516,8 @@ class EpisodePanel(QWidget):
         chosen = self.checked_episodes()
         if not chosen:
             return
-        added = self.ctx.manager.add(self.anime.title, self.anime.session, chosen, site=self.anime.site)
+        added = self.ctx.manager.add(self.anime.title, self.anime.session, chosen, site=self.anime.site,
+                                     poster=self.anime.poster)
         skipped = len(chosen) - len(added)
         message = f"Added {len(added)} episode(s) of {self.anime.title} to the queue"
         if skipped:

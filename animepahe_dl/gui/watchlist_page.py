@@ -210,7 +210,7 @@ class WatchlistPage(QWidget):
             queued = 0
             for show, numbers in wanted:
                 episodes = [e for e in self.ctx.provider(show.site).episodes(show.session) if e.number in numbers]
-                added = self.ctx.manager.add(show.title, show.session, episodes, site=show.site)
+                added = self.ctx.manager.add(show.title, show.session, episodes, site=show.site, poster=show.poster)
                 self.ctx.library.acknowledge(show.site, show.session, [e.number for e in episodes])
                 queued += len(added)
             return queued
