@@ -1,5 +1,7 @@
 # Anime Downloader (AnimePahe) for Windows 11
 
+<img src="docs/icon.png" alt="App icon: a blade across a rising sun" width="96" align="right">
+
 A desktop app that searches [AnimePahe](https://animepahe.pw), lists every episode of a show and
 downloads the episodes you pick, several at a time, as `.mp4` files.
 
@@ -13,6 +15,9 @@ downloads the episodes you pick, several at a time, as `.mp4` files.
 - **Portable mode.** Create an empty file called `portable.txt` next to `AnimePaheDL.exe`. Settings, the watchlist,
   the verification browser, ffmpeg and the default download folder (`Anime`) then live inside that folder, so you
   can carry it on a USB stick. (`ANIMEPAHEDL_DATA=<folder>` also moves the data folder.)
+- **App icon.** An original orange-and-black blade icon (`docs/icon.png`) is the default, also used for the exe
+  (`assets/AnimePaheDL.ico`, regenerate with `python tools/make_icon.py`). **Settings → Tray & notifications → App
+  icon** switches back to the classic purple one.
 - **Your own icon.** Put `AnimePaheDL.ico` (or `.png`, or `icon.ico` / `icon.png`) next to the exe or in the data
   folder and the window, taskbar and tray use it. Pick any picture you like; the repository ships no third-party art.
 - **Tray icon and notifications.** A tray icon shows the download status in its tooltip and has *Open*, *Pause

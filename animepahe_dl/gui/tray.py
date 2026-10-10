@@ -15,7 +15,7 @@ class TrayController(QObject):
     quit_requested = Signal()
     message_clicked = Signal(str)  # which page the notification was about: "queue" | "watchlist"
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(self, parent: QObject | None = None, icon_style: str = "blade") -> None:
         super().__init__(parent)
         self.available = QSystemTrayIcon.isSystemTrayAvailable()
         self.icon: QSystemTrayIcon | None = None
@@ -23,7 +23,7 @@ class TrayController(QObject):
         self._tooltip = ""
         if not self.available:
             return
-        self.icon = QSystemTrayIcon(app_icon(), self)
+        self.icon = QSystemTrayIcon(app_icon(icon_style), self)
         menu = QMenu()
         open_action = QAction("Open Anime Downloader", menu)
         open_action.triggered.connect(self.open_requested.emit)
@@ -44,6 +44,10 @@ class TrayController(QObject):
     @property
     def visible(self) -> bool:
         return bool(self.icon and self.icon.isVisible())
+
+    def set_icon(self, icon) -> None:  # type: ignore[no-untyped-def]
+        if self.icon:
+            self.icon.setIcon(icon)
 
     def set_enabled(self, enabled: bool) -> None:
         if self.icon:

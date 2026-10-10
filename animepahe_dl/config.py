@@ -85,6 +85,7 @@ class Settings:
     ffmpeg_path: str = ""
     # After a download finishes, rename the file and folder to the anime's Japanese title (MyAnimeList).
     rename_japanese: bool = False
+    icon_style: str = "blade"  # built-in icon: "blade" or "classic"
     tray_icon: bool = True  # show a system-tray icon (needed for notifications)
     notify_finished: bool = True  # notification when the download queue empties
     notify_new_episodes: bool = True  # notification when the start-up check finds new watchlist episodes
@@ -135,6 +136,8 @@ class Settings:
         self.animeheaven_url = (self.animeheaven_url or DEFAULT_ANIMEHEAVEN_URL).strip().rstrip("/")
         if not self.animeheaven_url.startswith(("http://", "https://")):
             self.animeheaven_url = "https://" + self.animeheaven_url
+        if self.icon_style not in ("blade", "classic"):
+            self.icon_style = "blade"
         if self.site not in SITES:
             self.site = "animepahe"
         try:

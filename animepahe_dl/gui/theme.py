@@ -333,20 +333,86 @@ def custom_icon() -> QIcon | None:
     return None
 
 
-def app_icon() -> QIcon:
+ICON_STYLES = {"blade": "Blade (orange and black)", "classic": "Classic (purple)"}
+
+
+def _draw_blade_icon(painter: QPainter, s: float) -> None:
+    """An original orange-and-black sword icon: a blade across a rising sun, drawn with plain shapes."""
+    painter.setPen(Qt.PenStyle.NoPen)
+    # background tile
+    tile = QLinearGradient(0, 0, 0, s)
+    tile.setColorAt(0, QColor("#1d1612"))
+    tile.setColorAt(1, QColor("#0d0a09"))
+    painter.setBrush(QBrush(tile))
+    painter.drawRoundedRect(QRectF(0, 0, s, s), s * 0.22, s * 0.22)
+    # sun
+    sun = QLinearGradient(0, s * 0.08, 0, s * 0.72)
+    sun.setColorAt(0, QColor("#ffb347"))
+    sun.setColorAt(1, QColor("#ff5a00"))
+    painter.setBrush(QBrush(sun))
+    painter.drawEllipse(QPointF(s * 0.60, s * 0.42), s * 0.30, s * 0.30)
+    # everything below is drawn along the blade's axis: x runs from the guard to the tip, up and to the right
+    painter.save()
+    painter.translate(s * 0.27, s * 0.77)
+    painter.rotate(-45)
+    painter.scale(s, s)
+    # handle
+    painter.setBrush(QColor("#2a1b15"))
+    painter.drawRoundedRect(QRectF(-0.27, -0.032, 0.27, 0.064), 0.014, 0.014)
+    painter.setBrush(QColor("#ff7a1a"))
+    for i in range(4):  # wrap diamonds
+        x = -0.235 + i * 0.062
+        painter.drawPolygon(QPolygonF([QPointF(x, 0), QPointF(x + 0.018, -0.02), QPointF(x + 0.036, 0),
+                                       QPointF(x + 0.018, 0.02)]))
+    painter.setBrush(QColor("#c9902f"))  # pommel
+    painter.drawEllipse(QPointF(-0.275, 0), 0.026, 0.04)
+    # blade
+    blade = QPainterPath(QPointF(0.0, -0.050))
+    blade.cubicTo(QPointF(0.30, -0.058), QPointF(0.62, -0.062), QPointF(0.80, -0.074))
+    blade.lineTo(QPointF(0.91, -0.088))   # tip
+    blade.cubicTo(QPointF(0.78, -0.028), QPointF(0.50, 0.024), QPointF(0.0, 0.046))
+    blade.closeSubpath()
+    steel = QLinearGradient(0, -0.06, 0, 0.04)
+    steel.setColorAt(0, QColor("#ffffff"))
+    steel.setColorAt(1, QColor("#aab0bd"))
+    painter.setBrush(QBrush(steel))
+    painter.drawPath(blade)
+    painter.setPen(_pen(QColor(60, 66, 80, 200), 0.006))  # ridge line
+    painter.drawLine(QPointF(0.03, -0.004), QPointF(0.85, -0.070))
+    painter.setPen(Qt.PenStyle.NoPen)
+    # guard
+    painter.setBrush(QColor("#e0a93a"))
+    painter.drawRoundedRect(QRectF(-0.012, -0.095, 0.036, 0.19), 0.016, 0.016)
+    painter.setBrush(QColor("#7a5418"))
+    painter.drawRoundedRect(QRectF(0.002, -0.07, 0.008, 0.14), 0.004, 0.004)
+    painter.restore()
+
+
+def _draw_classic_icon(painter: QPainter, s: float) -> None:
+    painter.setBrush(QColor(ACCENT))
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.drawRoundedRect(QRectF(0, 0, s, s), s * 0.22, s * 0.22)
+    _draw("download", painter, s, QColor("white"))
+
+
+def render_icon_pixmap(style: str, size: int) -> QPixmap:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pix)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+    (_draw_classic_icon if style == "classic" else _draw_blade_icon)(painter, float(size))
+    painter.end()
+    return pix
+
+
+def app_icon(style: str = "blade") -> QIcon:
+    """The window / taskbar / tray icon: the user's own picture if one was dropped next to the exe,
+    otherwise one of the built-in styles."""
     custom = custom_icon()
     if custom is not None:
         return custom
     icon = QIcon()
     for size in (16, 24, 32, 48, 64, 128, 256):
-        pix = QPixmap(size, size)
-        pix.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(pix)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setBrush(QColor(ACCENT))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(0, 0, size, size, size * 0.22, size * 0.22)
-        _draw("download", painter, size, QColor("white"))
-        painter.end()
-        icon.addPixmap(pix)
+        icon.addPixmap(render_icon_pixmap(style, size))
     return icon

@@ -16,7 +16,7 @@ from ..http import CloudflareChallenge, HttpClient
 from ..utils import find_ffmpeg
 from .search_page import AUDIO_LABELS
 from .setup_wizard import FfmpegInstaller
-from .theme import emphasize
+from .theme import ICON_STYLES, emphasize
 
 if TYPE_CHECKING:
     from .main_window import MainWindow
@@ -158,6 +158,11 @@ class SettingsPage(QWidget):
         self.close_to_tray = QCheckBox("Closing the window keeps downloading in the tray")
         for box_widget in (self.tray_icon, self.notify_finished, self.notify_new, self.close_to_tray):
             form.addRow("", box_widget)
+        self.icon_style = QComboBox()
+        for key, label in ICON_STYLES.items():
+            self.icon_style.addItem(label, key)
+        self.icon_style.setToolTip("A picture named AnimePaheDL.ico / icon.png next to the exe overrides this")
+        form.addRow("App icon", self.icon_style)
         self.tray_icon.toggled.connect(self._tray_toggled)
         self.tray_status = QLabel("")
         self.tray_status.setObjectName("muted")
@@ -212,6 +217,7 @@ class SettingsPage(QWidget):
         self.no_av1.setChecked(s.prefer_non_av1)
         self.rename_jp.setChecked(s.rename_japanese)
         self.check_updates.setChecked(s.check_updates)
+        self.icon_style.setCurrentIndex(max(0, self.icon_style.findData(s.icon_style)))
         self.tray_icon.setChecked(s.tray_icon)
         self.notify_finished.setChecked(s.notify_finished)
         self.notify_new.setChecked(s.notify_new_episodes)
@@ -238,6 +244,7 @@ class SettingsPage(QWidget):
         s.prefer_non_av1 = self.no_av1.isChecked()
         s.rename_japanese = self.rename_jp.isChecked()
         s.check_updates = self.check_updates.isChecked()
+        s.icon_style = self.icon_style.currentData()
         s.tray_icon = self.tray_icon.isChecked()
         s.notify_finished = self.notify_finished.isChecked()
         s.notify_new_episodes = self.notify_new.isChecked()
