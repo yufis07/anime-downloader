@@ -7,6 +7,9 @@ downloads the episodes you pick, several at a time, as `.mp4` files.
 
 ## Features
 
+- **Watchlist.** Click **☆ Follow** on a show. The **Watchlist** page checks all followed shows when the app
+  starts (and on demand), shows a **N new** badge, and downloads the new episodes in one click. Episode lists mark
+  what you already have with ✓, and **Select missing** picks the rest.
 - **Two sites.** Pick **AnimePahe** or **AnimeHeaven** next to the search box. AnimeHeaven serves plain `.mp4`
   files (one quality per episode, no Cloudflare check window needed), downloads resume, and its own romaji
   title is used for the *Rename to Japanese* option.
@@ -60,7 +63,7 @@ You can also point to `ffmpeg.exe` in **Settings**.
 
 ## How to use
 
-The sidebar on the left has three sections: **Search & Discover**, **Download Queue** and **Settings**.
+The sidebar on the left has four sections: **Search & Discover**, **Watchlist**, **Download Queue** and **Settings**.
 
 1. **Search & Discover.** Type a title and press **Enter** or **Search**. Results appear as cards with
    cover art, title, release season, episode count and score.
@@ -131,6 +134,7 @@ Settings and the browser profile live in `%APPDATA%\AnimePaheDL`.
 | `animepahe_dl/animepahe.py` | Site API client: search, episodes, source scraping and selection |
 | `animepahe_dl/mal.py` | English title → Japanese (romaji) title lookup on MyAnimeList (Jikan API) |
 | `animepahe_dl/animeheaven.py` | AnimeHeaven client: search, episode list, direct video link |
+| `animepahe_dl/library.py` | Watchlist and download history (`library.json`) |
 | `animepahe_dl/kwik.py` | JavaScript unpacker and playlist extraction |
 | `animepahe_dl/hls.py` | HLS parser and parallel AES-128 segment downloader with resume |
 | `animepahe_dl/downloader.py` | Download queue, parallel episodes, ffmpeg remux |

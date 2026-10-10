@@ -132,3 +132,19 @@ def test_download_resumes_and_renames_to_romaji(heaven_site, tmp_path, monkeypat
     manager.wait_all(poll=0.1)
     assert again[0].status == Status.SKIPPED
     manager.shutdown()
+
+
+def test_finished_download_is_reported_to_the_library(heaven_site, tmp_path, monkeypatch):
+    from animepahe_dl.library import Library
+
+    monkeypatch.setattr(dl_module, "find_ffmpeg", lambda _p="": None)
+    heaven = AnimeHeaven(HttpClient(retries=1), heaven_site)
+    library = Library(tmp_path / "library.json")
+    manager = DownloadManager(
+        None, Settings(download_dir=str(tmp_path / "dl")), animeheaven=heaven,
+        on_episode_done=lambda t: library.record_download(t.site, t.anime_session, t.episode.number, t.output_path))
+    episodes = [e for e in heaven.episodes("ak2gr") if e.session == EP1]
+    manager.add("Frieren", "ak2gr", episodes, site="animeheaven")
+    manager.wait_all(poll=0.1)
+    assert library.downloaded_numbers("animeheaven", "ak2gr") == {1.0}
+    manager.shutdown()

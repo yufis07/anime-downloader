@@ -168,8 +168,10 @@ class DownloadManager:
 
     def __init__(self, api: AnimePahe, settings: Settings,
                  on_cloudflare: Callable[[], None] | None = None, mal: MalLookup | None = None,
-                 animeheaven: AnimeHeaven | None = None) -> None:
+                 animeheaven: AnimeHeaven | None = None,
+                 on_episode_done: Callable[["DownloadTask"], None] | None = None) -> None:
         self.api = api
+        self.on_episode_done = on_episode_done
         self.animeheaven = animeheaven
         self.settings = settings
         self._mal = mal
@@ -291,6 +293,11 @@ class DownloadManager:
     def _run_task(self, task: DownloadTask) -> None:
         try:
             self._process(task)
+            if task.status in {Status.DONE, Status.SKIPPED} and self.on_episode_done:
+                try:
+                    self.on_episode_done(task)
+                except Exception:  # noqa: BLE001 - history is a convenience, never fail a download over it
+                    pass
         except Cancelled:
             task.status = Status.CANCELLED
             task.message = "Cancelled"

@@ -191,6 +191,7 @@ class EpisodePanel(QWidget):
         self.ctx = ctx
         self.anime: Anime | None = None
         self.episodes: list[Episode] = []
+        self.have: set[float] = set()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
@@ -214,7 +215,15 @@ class EpisodePanel(QWidget):
         self.meta = QLabel()
         self.meta.setObjectName("muted")
         self.meta.setWordWrap(True)
-        info.addWidget(back, 0, Qt.AlignmentFlag.AlignLeft)
+        self.follow_btn = QPushButton()
+        self.follow_btn.setCheckable(True)
+        self.follow_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.follow_btn.clicked.connect(self._toggle_follow)
+        top = QHBoxLayout()
+        top.addWidget(back, 0, Qt.AlignmentFlag.AlignLeft)
+        top.addStretch(1)
+        top.addWidget(self.follow_btn)
+        info.addLayout(top)
         info.addWidget(self.title)
         info.addWidget(self.meta)
         info.addStretch(1)
@@ -233,6 +242,9 @@ class EpisodePanel(QWidget):
         self.range_edit.returnPressed.connect(self._apply_range)
         range_btn = QPushButton("Select range")
         range_btn.clicked.connect(self._apply_range)
+        missing_btn = QPushButton("Select missing")
+        missing_btn.setToolTip("Select every episode you have not downloaded yet")
+        missing_btn.clicked.connect(self._select_missing)
         self.count_label = QLabel("")
         self.count_label.setObjectName("muted")
         self.count_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -241,6 +253,7 @@ class EpisodePanel(QWidget):
         controls.addSpacing(12)
         controls.addWidget(self.range_edit)
         controls.addWidget(range_btn)
+        controls.addWidget(missing_btn)
         controls.addStretch(1)
         controls.addWidget(self.count_label)
         layout.addLayout(controls)
@@ -288,6 +301,8 @@ class EpisodePanel(QWidget):
             self.ctx.load_image(anime.poster, self, self._set_cover(anime))
         self.quality.setCurrentIndex(max(0, self.quality.findData(self.ctx.settings.quality)))
         self.audio.setCurrentIndex(max(0, self.audio.findData(self.ctx.settings.audio)))
+        self.have = set()
+        self._update_follow_button()
         self.list.clear()
         placeholder = QListWidgetItem("Loading episodes…")
         placeholder.setFlags(Qt.ItemFlag.NoItemFlags)
@@ -313,10 +328,17 @@ class EpisodePanel(QWidget):
 
     def _fill(self, episodes: list[Episode]) -> None:
         self.episodes = episodes
+        self.have: set[float] = set()
+        if self.anime:
+            library = self.ctx.library
+            self.have = library.downloaded_numbers(self.anime.site, self.anime.session)
+            library.acknowledge(self.anime.site, self.anime.session, [e.number for e in episodes])
+            self.ctx.update_watchlist_badge()
+            self._update_follow_button()
         self.list.blockSignals(True)
         self.list.clear()
         for ep in episodes:
-            parts = [f"Episode {format_episode(ep.number)}"]
+            parts = [f"Episode {format_episode(ep.number)}" + ("  ✓" if ep.number in self.have else "")]
             if ep.title:
                 parts.append(ep.title)
             if ep.duration:
@@ -360,6 +382,30 @@ class EpisodePanel(QWidget):
             item.setCheckState(Qt.CheckState.Checked if predicate(ep) else Qt.CheckState.Unchecked)
         self.list.blockSignals(False)
         self._update_count()
+
+    def _select_missing(self) -> None:
+        self._set_checked(lambda ep: ep.number not in self.have)
+
+    def _update_follow_button(self) -> None:
+        following = bool(self.anime) and self.ctx.library.is_following(self.anime.site, self.anime.session)
+        self.follow_btn.setChecked(following)
+        self.follow_btn.setText("★ Following" if following else "☆ Follow")
+        self.follow_btn.setToolTip("Stop following this show" if following
+                                   else "Tell me when new episodes of this show come out")
+        self.follow_btn.setEnabled(bool(self.episodes))
+
+    def _toggle_follow(self) -> None:
+        if not self.anime:
+            return
+        library = self.ctx.library
+        if library.is_following(self.anime.site, self.anime.session):
+            library.unfollow(self.anime.site, self.anime.session)
+        else:
+            library.follow(self.anime.site, self.anime.session, self.anime.title, self.anime.poster,
+                           [e.number for e in self.episodes])
+            self.ctx.notify(f"Following {self.anime.title}. New episodes will show up in the Watchlist.")
+        self._update_follow_button()
+        self.ctx.update_watchlist_badge()
 
     def _toggle_all(self, checked: bool) -> None:
         self._set_checked(lambda _ep: checked)
