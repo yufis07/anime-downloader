@@ -209,6 +209,10 @@ If this app saves you time, you can support its development:
 
 Donations are optional and the app stays free. The repository's **Sponsor** button links to the same page.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
+
 ## Disclaimer
 
 This tool is meant for personal use. Only download content you have the right to access, and

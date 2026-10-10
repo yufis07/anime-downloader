@@ -71,3 +71,13 @@ def test_current_build_reads_the_stamp_and_is_empty_without_one(monkeypatch):
     stamp.BUILD_SHA = "c" * 40
     monkeypatch.setitem(sys.modules, "animepahe_dl._build", stamp)  # what the CI build writes
     assert updates.current_build() == "c" * 40
+
+
+def test_changelog_top_entry_matches_the_version():
+    import re
+    from pathlib import Path
+
+    from animepahe_dl import __version__
+
+    text = (Path(__file__).resolve().parents[1] / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert re.search(r"^## (\d+\.\d+\.\d+)\b", text, re.M).group(1) == __version__
