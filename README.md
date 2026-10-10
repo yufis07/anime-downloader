@@ -7,6 +7,9 @@ downloads the episodes you pick, several at a time, as `.mp4` files.
 
 ## Features
 
+- **Discover home.** Before you search, Search & Discover shows *Trending now*, *This season* and *Top rated*
+  rows with cover art (from AniList, cached for six hours, works offline from the cache). Click a title and the
+  app finds it on the selected site, trying the English name first and the romaji name second.
 - **Show page.** Opening a show gives a banner header with the cover, romaji and English title, score, year,
   studio, genres and a collapsible synopsis (from AniList, works for both sites). The search bar steps aside so the
   episode list has the whole window.
@@ -137,6 +140,7 @@ Settings and the browser profile live in `%APPDATA%\AnimePaheDL`.
 | `animepahe_dl/animepahe.py` | Site API client: search, episodes, source scraping and selection |
 | `animepahe_dl/mal.py` | English title → Japanese (romaji) title lookup on MyAnimeList (Jikan API) |
 | `animepahe_dl/animeheaven.py` | AnimeHeaven client: search, episode list, direct video link |
+| `animepahe_dl/discover.py` | Trending / this season / top rated lists for the Discover home (AniList, cached) |
 | `animepahe_dl/details.py` | Synopsis, genres, score and banner for the show page (AniList) |
 | `animepahe_dl/library.py` | Watchlist and download history (`library.json`) |
 | `animepahe_dl/kwik.py` | JavaScript unpacker and playlist extraction |
